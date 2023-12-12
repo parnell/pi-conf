@@ -1,0 +1,18 @@
+
+[tool.poetry]
+name = "pi-conf"
+version = "0.5.5"
+description = "Easy configs for python projects"
+authors = ["parnell"]
+readme = "README.md"
+project.license = { file = "LICENSE" }
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+toml = {version = "^0.10.2", python = "<=3.10"}
+platformdirs = "^4.1.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
