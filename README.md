@@ -3,6 +3,7 @@
 Easy use Configs for python projects. Allows loading the config files in the application directory (os specific). Once set the config can be used as a singleton across the project or pass around.
 
 ## Locations for the config file
+The following are the default locations that will be searched
 *  ```~/.config/<appname>/config.(toml|json|ini|yaml)```
 * ```<system config directory>/<appname>/config.(toml|json|ini|yaml)```
 
@@ -10,6 +11,7 @@ Easy use Configs for python projects. Allows loading the config files in the app
 
 The example code uses the following as the example configuration file
 ```toml
+# My config.toml file
 foo = 1
 [bar]
 a = 2
@@ -17,8 +19,8 @@ a = 2
 
 ### Using inside of a single script
 ```python
-from pi_conf import load_config
-cfg = load_config("ourappname")
+from pi_conf import set_config
+cfg = set_config("ourappname")
 
 print(cfg.foo) # 1
 print(cfg.bar.a) # 2
@@ -31,8 +33,8 @@ The following is the preferred way of using the p-config module. We set it once 
 ```python
 # __init__.py
 
-from pi_conf import load_config
-load_config("ourappname") ## Sets the config from the application <appname> directory
+from pi_conf import set_config
+set_config("ourappname") ## Sets the config from the application <appname> directory
 from pi_conf import cfg as cfg ## Allows the cfg to be importable from our app
 
 ```
