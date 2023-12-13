@@ -120,8 +120,7 @@ def make_attr_dict(d: dict, source: str = None):
 def _load_config_file(path: str) -> dict:
     __, ext = os.path.splitext(path)
     if ext == ".toml":
-        with open(path, "rb") as fp:
-            return tomllib.load(fp)
+        return tomllib.load(path)
     elif ext == ".json":
         with open(path, "r") as fp:
             return json.load(fp)
