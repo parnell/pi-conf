@@ -15,8 +15,12 @@ except:
 
 try:  ## python 3.11+ have toml in the core libraries
     import tomllib
-except:  ## python 3.10- need the toml library
-    import toml as tomllib
+
+    is_tomllib = True
+except:  ## python <3.11 need the toml library
+    import toml
+
+    is_tomllib = False
 try:
     from platformdirs import site_config_dir
 except:
@@ -120,7 +124,11 @@ def make_attr_dict(d: dict, source: str = None):
 def _load_config_file(path: str) -> dict:
     __, ext = os.path.splitext(path)
     if ext == ".toml":
-        return tomllib.load(path)
+        if is_tomllib: ## python 3.11+ have toml in the core libraries
+            with open(path, "rb") as fp:
+                return tomllib.load(fp)
+        else: ## python <3.11 need the toml library
+            return toml.load(path)
     elif ext == ".json":
         with open(path, "r") as fp:
             return json.load(fp)
@@ -171,36 +179,31 @@ def read_config_dir(config_file_or_appname: str) -> Config:
 
 
 def update_config(appname_path_dict: str | dict) -> Config:
-    """Set the config to use
+    """Update the global config with another config
 
     Args:
-        appname_path_dict (str): Set the config for SQLAlchemy Extensions.
+        appname_path_dict (str): Set the config from an appname | path | dict
         Can be passed with the following.
             Dict: updates cfg with the given dict
-            str: a path to a .toml file
+            str: a path to a (.toml|.json|.ini|.yaml) file
             str: appname to search for the config.toml in the the application config dir
 
     Returns:
         Config: A config object (an attribute dictionary)
     """
-    if isinstance(appname_path_dict, dict):
-        newcfg = make_attr_dict(appname_path_dict)
-        cfg.__source__ = "dict"
-    else:
-        newcfg = read_config_dir(appname_path_dict)
-        cfg.__source__ = newcfg.__source__
+    newcfg = load_config(appname_path_dict)
     cfg.update(newcfg)
     return cfg
 
 
-def load_config(appname_path_dict: str | dict) -> Config:
-    """Set the config.toml to use
+def set_config(appname_path_dict: str | dict) -> Config:
+    """Sets the global config.toml to use based on the given appname | path | dict
 
     Args:
-        appname_path_dict (str): Set the config for SQLAlchemy Extensions.
+        appname_path_dict (str): Set the config from an appname | path | dict
         Can be passed with the following.
             Dict: updates cfg with the given dict
-            str: a path to a .toml file
+            str: a path to a (.toml|.json|.ini|.yaml) file
             str: appname to search for the config.toml in the the application config dir
 
     Returns:
@@ -210,7 +213,28 @@ def load_config(appname_path_dict: str | dict) -> Config:
     return update_config(appname_path_dict)
 
 
-cfg = Config()  ## our config
+def load_config(appname_path_dict: str | dict) -> Config:
+    """Loads a config based on the given appname | path | dict
+
+    Args:
+        appname_path_dict (str): Set the config from an appname | path | dict
+        Can be passed with the following.
+            Dict: updates cfg with the given dict
+            str: a path to a (.toml|.json|.ini|.yaml) file
+            str: appname to search for the config.toml in the the application config dir
+
+    Returns:
+        Config: A config object (an attribute dictionary)
+    """
+    if isinstance(appname_path_dict, dict):
+        newcfg = make_attr_dict(appname_path_dict)
+        newcfg.__source__ = "dict"
+    else:
+        newcfg = read_config_dir(appname_path_dict)
+    return newcfg
+
+
+cfg = Config()  ## Our global config
 
 
 def _set_log_level(level: str | int, name: str = None):
