@@ -6,7 +6,12 @@ import logging
 import os
 from typing import Any
 
-import yaml
+try:
+    import yaml
+
+    has_yaml = True
+except:
+    has_yaml = False
 
 try:  ## python 3.11+ have toml in the core libraries
     import tomllib
@@ -115,15 +120,21 @@ def make_attr_dict(d: dict, source: str = None):
 def _load_config_file(path: str) -> dict:
     __, ext = os.path.splitext(path)
     if ext == ".toml":
-        return tomllib.load(path)
+        with open(path, "rb") as fp:
+            return tomllib.load(fp)
     elif ext == ".json":
-        with open (path, "r") as fp:
+        with open(path, "r") as fp:
             return json.load(fp)
     elif ext == ".ini":
         cfg = configparser.ConfigParser()
         cfg.read(path)
         return cfg
     elif ext == ".yaml":
+        if not has_yaml:
+            raise Exception(
+                "Error! YAML not installed. If you would like to use YAML with pi-conf, "
+                "install it with 'pip install pyyaml' or 'pip install pi-conf[yaml]"
+            )
         with open(path, "r") as fp:
             return yaml.safe_load(fp)
 
@@ -227,7 +238,7 @@ def _get_importer_project_name():
         if module:
             module_path = os.path.abspath(module.__file__)
             n = os.path.basename(os.path.dirname(module_path))
-            if n not in ["p_conf", "tests", "unittest"]:
+            if n not in ["pi_conf", "tests", "unittest"]:
                 return n
     frame = inspect.stack()[1]
     module = inspect.getmodule(frame[0])

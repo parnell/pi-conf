@@ -3,7 +3,7 @@ import sys
 import tempfile
 import unittest
 
-from p_conf.config import _load_config_file
+from pi_conf.config import _load_config_file
 
 basedir = os.path.abspath(os.getcwd())
 sys.path.append(basedir)
@@ -19,12 +19,12 @@ class TestConfig(unittest.TestCase):
         pass
 
     def test_config_empty_at_start(self):
-        from p_conf import cfg
+        from pi_conf import cfg
 
         self.assertEqual(len(cfg), 0)
 
     def test_config_attr_dict(self):
-        from p_conf import Config
+        from pi_conf import Config
 
         cfg = Config.make_attr_dict({})
         cfg.update({"a": 1})

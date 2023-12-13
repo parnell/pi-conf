@@ -17,7 +17,7 @@ a = 2
 
 ### Using inside of a single script
 ```python
-from p_conf import load_config
+from pi_conf import load_config
 cfg = load_config("ourappname")
 
 print(cfg.foo) # 1
@@ -31,9 +31,9 @@ The following is the preferred way of using the p-config module. We set it once 
 ```python
 # __init__.py
 
-from p_conf import load_config
+from pi_conf import load_config
 load_config("ourappname") ## Sets the config from the application <appname> directory
-from p_conf import cfg as cfg ## Allows the cfg to be importable from our app
+from pi_conf import cfg as cfg ## Allows the cfg to be importable from our app
 
 ```
 
@@ -48,7 +48,7 @@ print(cfg.foo) # 1
 
 * Option 2
 ```python
-from p_conf import cfg ## Import the cfg from p-config
+from pi_conf import cfg ## Import the cfg from p-config
 
 print(cfg.foo) # 1
 ```
