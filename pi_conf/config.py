@@ -32,7 +32,7 @@ except:
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
-class Config(dict):
+class AttrDict(dict):
     """Config class, an attr dict that allows referencing by attribute
     Example:
         cfg = Config({"a":1, "b":{"c":3}})
@@ -80,8 +80,43 @@ class Config(dict):
                 os.environ[newk] = str(v)
 
     @staticmethod
-    def make_attr_dict(d: dict):
-        """Make an AttrDict (Config) object without any keys
+    def _from_dict(d: dict) -> 'AttrDict':
+        """Make an AttrDict object without any keys
+        that will overwrite the normal functions of a
+
+        Args:
+            d (dict): _description_
+
+        Returns:
+            _type_: _description_
+        """
+
+        def _from_list(l):
+            ### TODO change to generic iterable
+            new_l = []
+            for pot_dict in l:
+                if isinstance(pot_dict, dict):
+                    new_l.append(AttrDict._from_dict(pot_dict))
+                elif isinstance(pot_dict, list):
+                    new_l.append(_from_list(pot_dict))
+                else:
+                    new_l.append(pot_dict)
+            return new_l
+
+        d = Config(**d)
+        for k, v in d.items():
+            if k in _attr_dict_dont_overwrite:
+                raise Exception(f"Error! config key={k} would overwrite a default dict attr/func")
+            if isinstance(v, dict):
+                d[k] = AttrDict._from_dict(v)
+            elif isinstance(v, list):
+                d[k] = _from_list(v)
+        return d
+
+
+    @staticmethod
+    def from_dict(d: dict) -> 'AttrDict':
+        """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
         Args:
@@ -93,41 +128,23 @@ class Config(dict):
         Returns:
             _type_: _description_
         """
-        d = Config(**d)
-        for k, v in d.items():
-            if k in _attr_dict_dont_overwrite:
-                raise Exception(f"Error! config key={k} would overwrite a default dict attr/func")
-            if isinstance(v, dict):
-                d[k] = make_attr_dict(v)
+        d = AttrDict._from_dict(d)
+        d.__source__ = "dict"
         return d
 
 
-def make_attr_dict(d: dict, source: str = None):
-    """Make an AttrDict (Config) object without any keys
-    that will overwrite the normal functions of a
+class Config(AttrDict):
+    pass
 
-    Args:
-        d (dict): _description_
-        source (dict): optional source of the config
-
-    Raises:
-        Exception: _description_
-
-    Returns:
-        _type_: _description_
-    """
-    d = Config.make_attr_dict(d)
-    d.__source__ = source
-    return d
 
 
 def _load_config_file(path: str) -> dict:
     __, ext = os.path.splitext(path)
     if ext == ".toml":
-        if is_tomllib: ## python 3.11+ have toml in the core libraries
+        if is_tomllib:  ## python 3.11+ have toml in the core libraries
             with open(path, "rb") as fp:
                 return tomllib.load(fp)
-        else: ## python <3.11 need the toml library
+        else:  ## python <3.11 need the toml library
             return toml.load(path)
     elif ext == ".json":
         with open(path, "r") as fp:
@@ -173,9 +190,11 @@ def read_config_dir(config_file_or_appname: str) -> Config:
             if os.path.isfile(potential_config):
                 logging.debug(f"p-config::config.py: Using '{potential_config}'")
                 cfg = _load_config_file(potential_config)
-                return make_attr_dict(cfg, potential_config)
+                cfg = Config.from_dict(cfg)
+                cfg.__source__ = potential_config
+                return cfg
     logging.debug(f"No config file found. Using blank config")
-    return make_attr_dict({})
+    return Config()
 
 
 def update_config(appname_path_dict: str | dict) -> Config:
@@ -227,8 +246,7 @@ def load_config(appname_path_dict: str | dict) -> Config:
         Config: A config object (an attribute dictionary)
     """
     if isinstance(appname_path_dict, dict):
-        newcfg = make_attr_dict(appname_path_dict)
-        newcfg.__source__ = "dict"
+        newcfg = Config.from_dict(appname_path_dict)
     else:
         newcfg = read_config_dir(appname_path_dict)
     return newcfg
@@ -242,6 +260,7 @@ def _set_log_level(level: str | int, name: str = None):
 
     Args:
         level (str): log level
+        name (str): logger name
     """
     logger = logging.getLogger(name)
     level = logging._nameToLevel.get(level.upper)
@@ -249,24 +268,3 @@ def _set_log_level(level: str | int, name: str = None):
         logging.basicConfig(level=level)
         logger.setLevel(level)
         logger.debug(f"p-config: logging set to {level}")
-
-
-def _get_importer_project_name():
-    """Get the name of the project that imported this module
-    meant to be used from within a module to get the name of the project automtically"""
-
-    for i in range(len(inspect.stack())):
-        frame = inspect.stack()[i]
-        module = inspect.getmodule(frame[0])
-        if module:
-            module_path = os.path.abspath(module.__file__)
-            n = os.path.basename(os.path.dirname(module_path))
-            if n not in ["pi_conf", "tests", "unittest"]:
-                return n
-    frame = inspect.stack()[1]
-    module = inspect.getmodule(frame[0])
-    if module:
-        module_path = os.path.abspath(module.__file__)
-        # Parse this path according to your project's structure
-        return os.path.basename(os.path.dirname(module_path))
-    return None
