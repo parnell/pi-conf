@@ -23,11 +23,17 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(len(cfg), 0)
 
-    def test_config_attr_dict(self):
+    def test_config_from_dict(self):
         from pi_conf import Config
 
-        cfg = Config.make_attr_dict({})
-        cfg.update({"a": 1})
+        cfg = Config.from_dict({"a": 1})
+
+        self.assertEqual(cfg.a, 1)
+
+    def test_config_from_raw_dict(self):
+        from pi_conf import Config
+
+        cfg = Config({"a": 1})
 
         self.assertEqual(cfg.a, 1)
 
