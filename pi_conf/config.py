@@ -48,7 +48,7 @@ class AttrDict(dict):
         self,
         d: dict[str, Any] = None,
         recursive: bool = True,
-        ignore_complications: bool = False,
+        ignore_complications: bool = True,
         prefix: str = "",
         to_upper: bool = True,
         overwrite: bool = False,
@@ -66,9 +66,17 @@ class AttrDict(dict):
         if d is None:
             d = self
         for k, v in d.items():
+            is_iterable = _is_iterable(v)
             if recursive and isinstance(v, dict):
-                self.to_env(d=v, prefix=f"{k}_")
-            elif not ignore_complications and _is_iterable(v):
+                self.to_env(
+                    d=v,
+                    recursive=recursive,
+                    ignore_complications=ignore_complications,
+                    prefix=f"{k}_",
+                    to_upper=to_upper,
+                    overwrite=overwrite,
+                )
+            elif not ignore_complications and is_iterable:
                 raise Exception(
                     f"Error! Cannot export iterable to environment variable '{k}' with value {v}"
                 )
@@ -77,10 +85,14 @@ class AttrDict(dict):
                     newk = f"{prefix}{k}".upper()
                 if os.environ.get(newk) and not overwrite:
                     continue
-                os.environ[newk] = str(v)
+                if is_iterable:
+                    nv = json.dumps(v)
+                else:
+                    nv = str(v)
+                os.environ[newk] = nv
 
-    @staticmethod
-    def _from_dict(d: dict) -> 'AttrDict':
+    @classmethod
+    def _from_dict(cls: "AttrDict", d: dict) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
@@ -96,26 +108,25 @@ class AttrDict(dict):
             new_l = []
             for pot_dict in l:
                 if isinstance(pot_dict, dict):
-                    new_l.append(AttrDict._from_dict(pot_dict))
+                    new_l.append(cls._from_dict(pot_dict))
                 elif isinstance(pot_dict, list):
                     new_l.append(_from_list(pot_dict))
                 else:
                     new_l.append(pot_dict)
             return new_l
 
-        d = Config(**d)
+        d = cls(**d)
         for k, v in d.items():
             if k in _attr_dict_dont_overwrite:
                 raise Exception(f"Error! config key={k} would overwrite a default dict attr/func")
             if isinstance(v, dict):
-                d[k] = AttrDict._from_dict(v)
+                d[k] = cls._from_dict(v)
             elif isinstance(v, list):
                 d[k] = _from_list(v)
         return d
 
-
-    @staticmethod
-    def from_dict(d: dict) -> 'AttrDict':
+    @classmethod
+    def from_dict(cls: "AttrDict", d: dict) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
@@ -128,18 +139,69 @@ class AttrDict(dict):
         Returns:
             _type_: _description_
         """
-        d = AttrDict._from_dict(d)
+        d = cls._from_dict(d)
         d.__source__ = "dict"
         return d
+
+    @classmethod
+    def from_str(cls: "AttrDict", config_str: str, config_type: str = "toml") -> "AttrDict":
+        """Make an AttrDict object from a string
+
+        Args:
+            config_str (str): _description_
+
+        Raises:
+            Exception: _description_
+
+        Returns:
+            _type_: _description_
+        """
+        if config_type == "toml":
+            if is_tomllib:
+                d = tomllib.loads(config_str)
+            else:
+                d = toml.loads(config_str)
+        elif config_type == "json":
+            d = json.loads(config_str)
+        elif config_type == "ini":
+            cfg = configparser.ConfigParser()
+            cfg.read_string(config_str)
+            d = {}
+            for section in cfg.sections():
+                d[section] = {}
+                for k, v in cfg.items(section):
+                    d[section][k] = v
+        elif config_type == "yaml":
+            if not has_yaml:
+                raise Exception(
+                    "Error! YAML not installed. If you would like to use YAML with pi-conf, "
+                    "install it with 'pip install pyyaml' or 'pip install pi-conf[yaml]"
+                )
+            d = yaml.safe_load(config_str)
+        else:
+            raise Exception(f"Error! Unknown config_type '{config_type}'")
+        return cls.from_dict(d)
+
+    @staticmethod
+    def _set_log_level_(level: str | int, name: str = None):
+        """Set logging to the specified level
+
+        Args:
+            level (str): log level
+            name (str): logger name
+        """
+        _set_log_level(level, name)
 
 
 class Config(AttrDict):
     pass
 
 
+def _load_config_file(path: str, ext: str = None) -> dict:
+    """Load a config file from the given path"""
+    if ext is None:
+        __, ext = os.path.splitext(path)
 
-def _load_config_file(path: str) -> dict:
-    __, ext = os.path.splitext(path)
     if ext == ".toml":
         if is_tomllib:  ## python 3.11+ have toml in the core libraries
             with open(path, "rb") as fp:
@@ -263,7 +325,8 @@ def _set_log_level(level: str | int, name: str = None):
         name (str): logger name
     """
     logger = logging.getLogger(name)
-    level = logging._nameToLevel.get(level.upper)
+    if isinstance(level, str):
+        level = logging._nameToLevel.get(level.upper)
     if level and level != logger.level:
         logging.basicConfig(level=level)
         logger.setLevel(level)
