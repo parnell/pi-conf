@@ -1,6 +1,5 @@
 """Config"""
 import configparser
-import inspect
 import json
 import logging
 import os
