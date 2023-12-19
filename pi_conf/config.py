@@ -28,6 +28,8 @@ except:
         return f"~/.config/{appname}"
 
 
+log = logging.getLogger(__name__)
+
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
@@ -181,16 +183,6 @@ class AttrDict(dict):
             raise Exception(f"Error! Unknown config_type '{config_type}'")
         return cls.from_dict(d)
 
-    @staticmethod
-    def _set_log_level_(level: str | int, name: str = None):
-        """Set logging to the specified level
-
-        Args:
-            level (str): log level
-            name (str): logger name
-        """
-        _set_log_level(level, name)
-
 
 class Config(AttrDict):
     pass
@@ -249,12 +241,12 @@ def read_config_dir(config_file_or_appname: str) -> Config:
             potential_config = potential_config.replace("<ext>", extension)
             potential_config = os.path.expanduser(potential_config)
             if os.path.isfile(potential_config):
-                logging.debug(f"p-config::config.py: Using '{potential_config}'")
+                log.debug(f"p-config::config.py: Using '{potential_config}'")
                 cfg = _load_config_file(potential_config)
                 cfg = Config.from_dict(cfg)
                 cfg.__source__ = potential_config
                 return cfg
-    logging.debug(f"No config file found. Using blank config")
+    log.debug(f"No config file found. Using blank config")
     return Config()
 
 
@@ -314,19 +306,3 @@ def load_config(appname_path_dict: str | dict) -> Config:
 
 
 cfg = Config()  ## Our global config
-
-
-def _set_log_level(level: str | int, name: str = None):
-    """Set logging to the specified level
-
-    Args:
-        level (str): log level
-        name (str): logger name
-    """
-    logger = logging.getLogger(name)
-    if isinstance(level, str):
-        level = logging._nameToLevel.get(level.upper)
-    if level and level != logger.level:
-        logging.basicConfig(level=level)
-        logger.setLevel(level)
-        logger.debug(f"p-config: logging set to {level}")
