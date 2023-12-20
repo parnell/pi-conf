@@ -1,8 +1,11 @@
 """Config"""
 import configparser
+import inspect
 import json
 import logging
 import os
+from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import Any
 
 try:
@@ -33,6 +36,116 @@ log = logging.getLogger(__name__)
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
+@dataclass
+class Provenance:
+    """Provenance of the config"""
+
+    def __init__(self, source: str, stack: str = None):
+        self.stack = stack
+        if self.stack is None:
+            self.stack = _provenance.get_method_that_called_this_method()
+        self.source = source
+
+    def __repr__(self):
+        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
+
+    def __str__(self):
+        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
+
+
+@dataclass
+class ProvenanceManager:
+    """Provenance manager"""
+
+    _provenance: dict[int, list[Provenance]] = field(default_factory=lambda: defaultdict(list))
+
+    def get(self, obj) -> list[Provenance]:
+        """Get the provenance of the given object"""
+        return self._provenance.get(id(obj), [])
+
+    def set(self, obj, provenance: list[Provenance]):
+        """Set the provenance of the given object"""
+        if isinstance(provenance, Provenance):
+            provenance = [provenance]
+        self._provenance[id(obj)] = provenance
+
+    def append(self, obj, provenance: Provenance):
+        """Append to the provenance of the given object"""
+        self._provenance[id(obj)].append(provenance)
+
+    def extend(self, obj, provenance: list[Provenance]):
+        """Extend the provenance of the given object"""
+        self._provenance[id(obj)].extend(provenance)
+
+    def clear(self, obj):
+        """Clear the provenance of the given object"""
+        self._provenance[id(obj)] = []
+
+    def __repr__(self):
+        return f"<ProvenanceManager: {self._provenance}>"
+
+    def delete(self, obj):
+        """Delete the provenance of the given object"""
+        try:
+            del self._provenance[id(obj)]
+        except KeyError:
+            pass
+
+    @staticmethod
+    def get_method_that_called_this_method() -> str:
+        """Get the method that called this method"""
+        try:
+            stack = []
+            for i in range(len(inspect.stack())):
+                frame = inspect.stack()[i]
+                module = inspect.getmodule(frame[0])
+                module_path = os.path.abspath(module.__file__)
+                base_name = os.path.basename(module_path)
+                n = os.path.basename(os.path.dirname(module_path))
+                fn = frame.function
+                stack.append(f"{base_name}::{fn}")
+                # print(f"{i}           {base_name}::{fn}")
+                if n != "pi_conf":
+                    break
+            # print("######", " -> ".join(stack))
+            return " -> ".join(stack[-2:][::-1])
+        except Exception as e:
+            log.error(f"Error! {e}")
+            return "Unknown"
+
+
+@dataclass
+class NullOpProvenanceManager(ProvenanceManager):
+    """Null op provenance manager"""
+
+    def get(self, obj) -> list[Provenance]:
+        """Get the provenance of the given object"""
+        return []
+
+    def set(self, obj, provenance: list[Provenance]):
+        """Set the provenance of the given object"""
+
+    def append(self, obj, provenance: Provenance):
+        """Append to the provenance of the given object"""
+
+    def extend(self, obj, provenance: list[Provenance]):
+        """Extend the provenance of the given object"""
+
+    def clear(self, obj):
+        """Clear the provenance of the given object"""
+
+    def __repr__(self):
+        return f"<NullOpProvenanceManager>"
+
+    def delete(self, obj):
+        """Delete the provenance of the given object"""
+
+    @staticmethod
+    def get_method_that_called_this_method() -> str:
+        """Get the method that called this method"""
+        return "Unknown"
+
+
 class AttrDict(dict):
     """Config class, an attr dict that allows referencing by attribute
     Example:
@@ -40,10 +153,24 @@ class AttrDict(dict):
         cfg.a.b.c == cfg["a"]["b"]["c"] # True
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__source__: str = None
-        self.__dict__ = self
+    @property
+    def provenance(self) -> list[Provenance]:
+        return _provenance.get(self)
+
+    def __del__(self):
+        """Delete the config from the provenance if this object is deleted"""
+        _provenance.delete(self)
+
+    def update(self, *args, **kwargs):
+        """Update the config with another dict"""
+        _add_to_provenance = kwargs.pop("_add_to_provenance", True)
+        super().update(*args, **kwargs)
+        if _add_to_provenance:
+            _provenance.append(self, Provenance("dict"))
+
+    def clear(self) -> None:
+        _provenance.delete(cfg)
+        return super().clear()
 
     def to_env(
         self,
@@ -93,25 +220,35 @@ class AttrDict(dict):
                 os.environ[newk] = nv
 
     @classmethod
-    def _from_dict(cls: "AttrDict", d: dict) -> "AttrDict":
+    def _from_dict(
+        cls: "AttrDict", d: dict, _nested_same_class: bool = False, _depth: int = 0
+    ) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
         Args:
-            d (dict): _description_
+            cls (AttrDict): Create a new AttrDict object (or subclass)
+            d (dict): The dictionary to convert to an AttrDict
+            _nested_same_class (bool): If True, nested dicts will be the subclass,
+                else they will be AttrDict
 
         Returns:
-            _type_: _description_
+            AttrDict: the AttrDict object, or subclass
         """
+        cls = cls if _nested_same_class or _depth == 0 else AttrDict
 
-        def _from_list(l):
+        def _from_list_or_tuple(l):
             ### TODO change to generic iterable
             new_l = []
             for pot_dict in l:
                 if isinstance(pot_dict, dict):
-                    new_l.append(cls._from_dict(pot_dict))
-                elif isinstance(pot_dict, list):
-                    new_l.append(_from_list(pot_dict))
+                    new_l.append(
+                        cls._from_dict(
+                            pot_dict, _nested_same_class=_nested_same_class, _depth=_depth + 1
+                        )
+                    )
+                elif isinstance(v, list) or isinstance(v, tuple):
+                    new_l.append(_from_list_or_tuple(pot_dict))
                 else:
                     new_l.append(pot_dict)
             return new_l
@@ -121,41 +258,56 @@ class AttrDict(dict):
             if k in _attr_dict_dont_overwrite:
                 raise Exception(f"Error! config key={k} would overwrite a default dict attr/func")
             if isinstance(v, dict):
-                d[k] = cls._from_dict(v)
-            elif isinstance(v, list):
-                d[k] = _from_list(v)
+                d[k] = cls._from_dict(v, _nested_same_class=_nested_same_class, _depth=_depth + 1)
+            elif isinstance(v, list) or isinstance(v, tuple):
+                d[k] = _from_list_or_tuple(v)
+            else:
+                d[k] = v
         return d
 
     @classmethod
-    def from_dict(cls: "AttrDict", d: dict) -> "AttrDict":
+    def from_dict(cls: "AttrDict", d: dict, _nested_same_class: bool = False) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
         Args:
-            d (dict): _description_
+            cls (AttrDict): Create a new AttrDict object (or subclass)
+            d (dict): The dictionary to convert to an AttrDict
+            _nested_same_class (bool): If True, nested dicts will be the subclass,
+                else they will be AttrDict
 
         Raises:
             Exception: _description_
 
         Returns:
-            _type_: _description_
+            AttrDict: the AttrDict object, or subclass
         """
-        d = cls._from_dict(d)
-        d.__source__ = "dict"
+        d = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
+        _provenance.append(d, Provenance("dict"))
+
         return d
 
     @classmethod
-    def from_str(cls: "AttrDict", config_str: str, config_type: str = "toml") -> "AttrDict":
+    def from_str(
+        cls: "AttrDict",
+        config_str: str,
+        config_type: str = "toml",
+        _nested_same_class: bool = False,
+    ) -> "AttrDict":
         """Make an AttrDict object from a string
 
         Args:
-            config_str (str): _description_
+            cls (AttrDict): Create a new AttrDict object (or subclass)
+            config_str (str): The string to convert to an AttrDict
+            config_type (str): The type of string to convert from (toml|json|ini|yaml)
+            _nested_same_class (bool): If True, nested dicts will be the subclass,
+                else they will be AttrDict
 
         Raises:
             Exception: _description_
 
         Returns:
-            _type_: _description_
+            AttrDict: the AttrDict object, or subclass
         """
         if config_type == "toml":
             if is_tomllib:
@@ -165,12 +317,12 @@ class AttrDict(dict):
         elif config_type == "json":
             d = json.loads(config_str)
         elif config_type == "ini":
-            cfg = configparser.ConfigParser()
-            cfg.read_string(config_str)
+            cfg_parser = configparser.ConfigParser()
+            cfg_parser.read_string(config_str)
             d = {}
-            for section in cfg.sections():
+            for section in cfg_parser.sections():
                 d[section] = {}
-                for k, v in cfg.items(section):
+                for k, v in cfg_parser.items(section):
                     d[section][k] = v
         elif config_type == "yaml":
             if not has_yaml:
@@ -181,7 +333,7 @@ class AttrDict(dict):
             d = yaml.safe_load(config_str)
         else:
             raise Exception(f"Error! Unknown config_type '{config_type}'")
-        return cls.from_dict(d)
+        return cls.from_dict(d, _nested_same_class=_nested_same_class)
 
 
 class Config(AttrDict):
@@ -203,9 +355,9 @@ def _load_config_file(path: str, ext: str = None) -> dict:
         with open(path, "r") as fp:
             return json.load(fp)
     elif ext == ".ini":
-        cfg = configparser.ConfigParser()
-        cfg.read(path)
-        return cfg
+        cfg_parser = configparser.ConfigParser()
+        cfg_parser.read(path)
+        return cfg_parser
     elif ext == ".yaml":
         if not has_yaml:
             raise Exception(
@@ -244,7 +396,8 @@ def read_config_dir(config_file_or_appname: str) -> Config:
                 log.debug(f"p-config::config.py: Using '{potential_config}'")
                 cfg = _load_config_file(potential_config)
                 cfg = Config.from_dict(cfg)
-                cfg.__source__ = potential_config
+                _provenance.set(cfg, Provenance(potential_config))
+
                 return cfg
     log.debug(f"No config file found. Using blank config")
     return Config()
@@ -264,7 +417,9 @@ def update_config(appname_path_dict: str | dict) -> Config:
         Config: A config object (an attribute dictionary)
     """
     newcfg = load_config(appname_path_dict)
-    cfg.update(newcfg)
+    cfg.update(newcfg, _add_to_provenance=False)
+    _provenance.extend(cfg, newcfg.provenance)
+    _provenance.delete(newcfg)
     return cfg
 
 
@@ -282,6 +437,7 @@ def set_config(appname_path_dict: str | dict) -> Config:
         Config: A config object (an attribute dictionary)
     """
     cfg.clear()
+
     return update_config(appname_path_dict)
 
 
@@ -305,4 +461,14 @@ def load_config(appname_path_dict: str | dict) -> Config:
     return newcfg
 
 
+def set_use_provenance(use_provenance: bool = True):
+    """Set whether or not to use provenance"""
+    global _provenance
+    if use_provenance:
+        _provenance = ProvenanceManager()
+    else:
+        _provenance = NullOpProvenanceManager()
+
+
 cfg = Config()  ## Our global config
+_provenance = ProvenanceManager()  ## provenance of the config
