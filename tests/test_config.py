@@ -27,6 +27,7 @@ class TestConfig(unittest.TestCase):
         from pi_conf import Config
 
         cfg = Config.from_dict({"a": 1})
+        from pi_conf import AttrDict
 
         self.assertEqual(cfg.a, 1)
 
@@ -93,4 +94,11 @@ class TestConfig(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    test_file = ""
+    if test_file:
+        suite = unittest.TestSuite()
+        suite.addTest(TestConfig(test_file))
+        runner = unittest.TextTestRunner()
+        runner.run(suite)
+    else:
+        unittest.main()
