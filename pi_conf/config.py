@@ -8,6 +8,9 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from pi_conf.provenance import NullOpProvenanceManager, Provenance, ProvenanceManager
+from pi_conf.provenance import get_provenance_manager as get_pmanager
+
 try:
     import yaml
 
@@ -36,116 +39,6 @@ log = logging.getLogger(__name__)
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
-@dataclass
-class Provenance:
-    """Provenance of the config"""
-
-    def __init__(self, source: str, stack: str = None):
-        self.stack = stack
-        if self.stack is None:
-            self.stack = _provenance.get_method_that_called_this_method()
-        self.source = source
-
-    def __repr__(self):
-        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
-
-    def __str__(self):
-        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
-
-
-@dataclass
-class ProvenanceManager:
-    """Provenance manager"""
-
-    _provenance: dict[int, list[Provenance]] = field(default_factory=lambda: defaultdict(list))
-
-    def get(self, obj) -> list[Provenance]:
-        """Get the provenance of the given object"""
-        return self._provenance.get(id(obj), [])
-
-    def set(self, obj, provenance: list[Provenance]):
-        """Set the provenance of the given object"""
-        if isinstance(provenance, Provenance):
-            provenance = [provenance]
-        self._provenance[id(obj)] = provenance
-
-    def append(self, obj, provenance: Provenance):
-        """Append to the provenance of the given object"""
-        self._provenance[id(obj)].append(provenance)
-
-    def extend(self, obj, provenance: list[Provenance]):
-        """Extend the provenance of the given object"""
-        self._provenance[id(obj)].extend(provenance)
-
-    def clear(self, obj):
-        """Clear the provenance of the given object"""
-        self._provenance[id(obj)] = []
-
-    def __repr__(self):
-        return f"<ProvenanceManager: {self._provenance}>"
-
-    def delete(self, obj):
-        """Delete the provenance of the given object"""
-        try:
-            del self._provenance[id(obj)]
-        except KeyError:
-            pass
-
-    @staticmethod
-    def get_method_that_called_this_method() -> str:
-        """Get the method that called this method"""
-        try:
-            stack = []
-            for i in range(len(inspect.stack())):
-                frame = inspect.stack()[i]
-                module = inspect.getmodule(frame[0])
-                module_path = os.path.abspath(module.__file__)
-                base_name = os.path.basename(module_path)
-                n = os.path.basename(os.path.dirname(module_path))
-                fn = frame.function
-                stack.append(f"{base_name}::{fn}")
-                # print(f"{i}           {base_name}::{fn}")
-                if n != "pi_conf":
-                    break
-            # print("######", " -> ".join(stack))
-            return " -> ".join(stack[-2:][::-1])
-        except Exception as e:
-            log.error(f"Error! {e}")
-            return "Unknown"
-
-
-@dataclass
-class NullOpProvenanceManager(ProvenanceManager):
-    """Null op provenance manager"""
-
-    def get(self, obj) -> list[Provenance]:
-        """Get the provenance of the given object"""
-        return []
-
-    def set(self, obj, provenance: list[Provenance]):
-        """Set the provenance of the given object"""
-
-    def append(self, obj, provenance: Provenance):
-        """Append to the provenance of the given object"""
-
-    def extend(self, obj, provenance: list[Provenance]):
-        """Extend the provenance of the given object"""
-
-    def clear(self, obj):
-        """Clear the provenance of the given object"""
-
-    def __repr__(self):
-        return f"<NullOpProvenanceManager>"
-
-    def delete(self, obj):
-        """Delete the provenance of the given object"""
-
-    @staticmethod
-    def get_method_that_called_this_method() -> str:
-        """Get the method that called this method"""
-        return "Unknown"
-
-
 class AttrDict(dict):
     """Config class, an attr dict that allows referencing by attribute
     Example:
@@ -153,23 +46,29 @@ class AttrDict(dict):
         cfg.a.b.c == cfg["a"]["b"]["c"] # True
     """
 
+    def __init__(self, *args, **kwargs):
+        enable_provenance = kwargs.pop("enable_provenance", False)
+        get_pmanager().set_enabled(self, enable_provenance)
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
+
     @property
     def provenance(self) -> list[Provenance]:
-        return _provenance.get(self)
+        return get_pmanager().get(self)
 
     def __del__(self):
         """Delete the config from the provenance if this object is deleted"""
-        _provenance.delete(self)
+        get_pmanager().delete(self)
 
     def update(self, *args, **kwargs):
         """Update the config with another dict"""
         _add_to_provenance = kwargs.pop("_add_to_provenance", True)
         super().update(*args, **kwargs)
         if _add_to_provenance:
-            _provenance.append(self, Provenance("dict"))
+            get_pmanager().append(self, Provenance("dict"))
 
     def clear(self) -> None:
-        _provenance.delete(cfg)
+        get_pmanager().clear(cfg)
         return super().clear()
 
     def to_env(
@@ -283,7 +182,7 @@ class AttrDict(dict):
             AttrDict: the AttrDict object, or subclass
         """
         d = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
-        _provenance.append(d, Provenance("dict"))
+        get_pmanager().append(d, Provenance("dict"))
 
         return d
 
@@ -337,7 +236,10 @@ class AttrDict(dict):
 
 
 class Config(AttrDict):
-    pass
+    def __init__(self, *args, **kwargs):
+        enable_provenance = kwargs.pop("enable_provenance", True)
+        super().__init__(*args, enable_provenance=enable_provenance, **kwargs)
+
 
 
 def _load_config_file(path: str, ext: str = None) -> dict:
@@ -396,7 +298,7 @@ def read_config_dir(config_file_or_appname: str) -> Config:
                 log.debug(f"p-config::config.py: Using '{potential_config}'")
                 cfg = _load_config_file(potential_config)
                 cfg = Config.from_dict(cfg)
-                _provenance.set(cfg, Provenance(potential_config))
+                get_pmanager().set(cfg, Provenance(potential_config))
 
                 return cfg
     log.debug(f"No config file found. Using blank config")
@@ -418,8 +320,8 @@ def update_config(appname_path_dict: str | dict) -> Config:
     """
     newcfg = load_config(appname_path_dict)
     cfg.update(newcfg, _add_to_provenance=False)
-    _provenance.extend(cfg, newcfg.provenance)
-    _provenance.delete(newcfg)
+    get_pmanager().extend(cfg, newcfg.provenance)
+    get_pmanager().delete(newcfg)
     return cfg
 
 
@@ -461,14 +363,4 @@ def load_config(appname_path_dict: str | dict) -> Config:
     return newcfg
 
 
-def set_use_provenance(use_provenance: bool = True):
-    """Set whether or not to use provenance"""
-    global _provenance
-    if use_provenance:
-        _provenance = ProvenanceManager()
-    else:
-        _provenance = NullOpProvenanceManager()
-
-
 cfg = Config()  ## Our global config
-_provenance = ProvenanceManager()  ## provenance of the config
