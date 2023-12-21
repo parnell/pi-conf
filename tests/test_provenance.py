@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 import pi_conf.config as config
-from pi_conf import Config
+from pi_conf import AttrDict, Config
 
 basedir = os.path.abspath(os.getcwd())
 sys.path.append(basedir)
@@ -18,6 +18,25 @@ class TestProvenance(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         pass
+
+    def test_provenance_of_attrdict(self):
+        """AttrDicts should not have provenance by default"""
+        from pi_conf.provenance import _provenance_manager
+
+        cfg = AttrDict.from_dict({"a": 1})
+
+        self.assertEqual(len(cfg.provenance), 0)
+        oid = id(cfg)
+        self.assertTrue(oid not in _provenance_manager._enabled)
+
+    def test_provenance_of_config_provenance_disabled(self):
+        from pi_conf.provenance import _provenance_manager
+
+        cfg = Config({"a": 1}, enable_provenance=False)
+
+        self.assertEqual(len(cfg.provenance), 0)
+        oid = id(cfg)
+        self.assertTrue(oid not in _provenance_manager._enabled)
 
     def test_provenance(self):
         cfg = Config.from_dict({"a": 1})
