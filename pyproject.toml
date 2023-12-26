@@ -1,7 +1,7 @@
 
 [tool.poetry]
 name = "pi-conf"
-version = "0.7.3"
+version = "0.7.4"
 description = "Easy configs for python projects"
 authors = ["parnell <3028114+parnell@users.noreply.github.com>"]
 readme = "README.md"

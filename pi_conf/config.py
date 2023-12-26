@@ -37,36 +37,15 @@ _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, fun
 
 
 class AttrDict(dict):
-    """Config class, an attr dict that allows referencing by attribute
+    """A dictionary class that allows referencing by attribute
     Example:
-        cfg = Config({"a":1, "b":{"c":3}})
-        cfg.a.b.c == cfg["a"]["b"]["c"] # True
+        d = AttrDict({"a":1, "b":{"c":3}})
+        d.a.b.c == d["a"]["b"]["c"] # True
     """
 
     def __init__(self, *args, **kwargs):
-        enable_provenance = kwargs.pop("enable_provenance", False)
-        get_pmanager().set_enabled(self, enable_provenance)
         super().__init__(*args, **kwargs)
         self.__dict__ = self
-
-    @property
-    def provenance(self) -> list[Provenance]:
-        return get_pmanager().get(self)
-
-    def __del__(self):
-        """Delete the config from the provenance if this object is deleted"""
-        get_pmanager().delete(self)
-
-    def update(self, *args, **kwargs):
-        """Update the config with another dict"""
-        _add_to_provenance = kwargs.pop("_add_to_provenance", True)
-        super().update(*args, **kwargs)
-        if _add_to_provenance:
-            get_pmanager().append(self, Provenance("dict"))
-
-    def clear(self) -> None:
-        get_pmanager().clear(cfg)
-        return super().clear()
 
     def to_env(
         self,
@@ -120,7 +99,7 @@ class AttrDict(dict):
         cls: "AttrDict", d: dict, _nested_same_class: bool = False, _depth: int = 0
     ) -> "AttrDict":
         """Make an AttrDict object without any keys
-        that will overwrite the normal functions of a
+        that will overwrite the normal functions of a dict
 
         Args:
             cls (AttrDict): Create a new AttrDict object (or subclass)
@@ -172,16 +151,10 @@ class AttrDict(dict):
             _nested_same_class (bool): If True, nested dicts will be the subclass,
                 else they will be AttrDict
 
-        Raises:
-            Exception: _description_
-
         Returns:
             AttrDict: the AttrDict object, or subclass
         """
-        d = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
-        get_pmanager().append(d, Provenance("dict"))
-
-        return d
+        return cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
 
     @classmethod
     def from_str(
@@ -232,10 +205,61 @@ class AttrDict(dict):
         return cls.from_dict(d, _nested_same_class=_nested_same_class)
 
 
-class Config(AttrDict):
+class ProvenanceDict(AttrDict):
+    """Config class, an attr dict that allows referencing by attribute and also
+    tracks provenance information, such as updates and where they were from.
+    Example:
+        cfg = Config({"a":1, "b":{"c":3}})
+        cfg.a.b.c == cfg["a"]["b"]["c"] # True
+    """
+
     def __init__(self, *args, **kwargs):
         enable_provenance = kwargs.pop("enable_provenance", True)
-        super().__init__(*args, enable_provenance=enable_provenance, **kwargs)
+        get_pmanager().set_enabled(self, enable_provenance)
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
+
+    @property
+    def provenance(self) -> list[Provenance]:
+        return get_pmanager().get(self)
+
+    def __del__(self):
+        """Delete the config from the provenance if this object is deleted"""
+        get_pmanager().delete(self)
+
+    def update(self, *args, **kwargs):
+        """Update the config with another dict"""
+        _add_to_provenance = kwargs.pop("_add_to_provenance", True)
+        super().update(*args, **kwargs)
+        if _add_to_provenance:
+            get_pmanager().append(self, Provenance("dict"))
+
+    def clear(self) -> None:
+        get_pmanager().clear(cfg)
+        return super().clear()
+
+    @classmethod
+    def from_dict(cls: "AttrDict", d: dict, _nested_same_class: bool = False) -> "AttrDict":
+        """Make an ProvenanceDict object without any keys
+        that will overwrite the normal functions of a dict
+
+        Args:
+            cls (AttrDict): Create a new AttrDict object (or subclass)
+            d (dict): The dictionary to convert to an AttrDict
+            _nested_same_class (bool): If True, nested dicts will be the subclass,
+                else they will be AttrDict
+
+        Returns:
+            AttrDict: the AttrDict object, or subclass
+        """
+        d = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
+        get_pmanager().append(d, Provenance("dict"))
+
+        return d
+
+
+class Config(ProvenanceDict):
+    pass
 
 
 def _load_config_file(path: str, ext: str = None) -> dict:
