@@ -38,6 +38,14 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(cfg.a, 1)
 
+    def test_config_from_list_dict_nested(self):
+        from pi_conf import Config
+
+        cfg = Config.from_dict({"a": 1, "b": [{"c": 2}, {"d": 3}]})
+
+        self.assertEqual(cfg.a, 1)
+        self.assertEqual(cfg.b[0].c, 2)
+
     def test_config_loads_toml(self):
         s = """
         [a]
@@ -91,7 +99,6 @@ class TestConfig(unittest.TestCase):
 
             cfg = _load_config_file(f.name)
             self.assertEqual(cfg["a"]["b"], "1")
-
 
 if __name__ == "__main__":
     test_file = ""
