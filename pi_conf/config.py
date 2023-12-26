@@ -1,14 +1,11 @@
 """Config"""
 import configparser
-import inspect
 import json
 import logging
 import os
-from collections import defaultdict
-from dataclasses import dataclass, field
 from typing import Any
 
-from pi_conf.provenance import NullOpProvenanceManager, Provenance, ProvenanceManager
+from pi_conf.provenance import Provenance
 from pi_conf.provenance import get_provenance_manager as get_pmanager
 
 try:
@@ -146,7 +143,7 @@ class AttrDict(dict):
                             pot_dict, _nested_same_class=_nested_same_class, _depth=_depth + 1
                         )
                     )
-                elif isinstance(v, list) or isinstance(v, tuple):
+                elif isinstance(pot_dict, list) or isinstance(pot_dict, tuple):
                     new_l.append(_from_list_or_tuple(pot_dict))
                 else:
                     new_l.append(pot_dict)
@@ -239,7 +236,6 @@ class Config(AttrDict):
     def __init__(self, *args, **kwargs):
         enable_provenance = kwargs.pop("enable_provenance", True)
         super().__init__(*args, enable_provenance=enable_provenance, **kwargs)
-
 
 
 def _load_config_file(path: str, ext: str = None) -> dict:
