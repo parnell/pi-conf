@@ -100,6 +100,15 @@ class TestConfig(unittest.TestCase):
             cfg = _load_config_file(f.name)
             self.assertEqual(cfg["a"]["b"], "1")
 
+    def test_config_dict_init(self):
+        from pi_conf import Config
+
+        cfg = Config({"a": 1})
+        self.assertEqual(cfg.a, 1)
+        self.assertEqual(cfg["a"], 1)
+        self.assertEqual(cfg.get("a"), 1)
+
+
 if __name__ == "__main__":
     test_file = ""
     if test_file:
