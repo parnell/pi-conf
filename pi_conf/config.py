@@ -47,6 +47,21 @@ class AttrDict(dict):
         super().__init__(*args, **kwargs)
         self.__dict__ = self
 
+    def __post_init__(self):
+        ## Iterate over members and add them to the dict
+        members = [
+            attr
+            for attr in dir(self)
+            if not callable(getattr(self, attr)) and not attr.startswith("__")
+        ]
+        for m in members:
+            if isinstance(getattr(self, m), dict):
+                nd = AttrDict.from_dict(getattr(self, m))
+                setattr(self, m, nd)
+                self[m] = nd
+            else:
+                self[m] = getattr(self, m)
+
     def to_env(
         self,
         d: dict[str, Any] = None,
@@ -219,6 +234,23 @@ class ProvenanceDict(AttrDict):
         super().__init__(*args, **kwargs)
         self.__dict__ = self
 
+    def __post_init__(self):
+        ## Iterate over members and add them to the dict
+        members = [
+            attr
+            for attr in dir(self)
+            if not callable(getattr(self, attr)) and not attr.startswith("__")
+        ]
+        for m in members:
+            if m == "provenance":
+                continue
+            if isinstance(getattr(self, m), dict):
+                nd = AttrDict.from_dict(getattr(self, m))
+                setattr(self, m, nd)
+                self[m] = nd
+            else:
+                self[m] = getattr(self, m)
+
     @property
     def provenance(self) -> list[Provenance]:
         return get_pmanager().get(self)
@@ -262,7 +294,7 @@ class Config(ProvenanceDict):
     pass
 
 
-def _load_config_file(path: str, ext: str = None) -> dict:
+def _load_config_file(path: str, ext: str = None) -> Config:
     """Load a config file from the given path"""
     if ext is None:
         __, ext = os.path.splitext(path)
@@ -270,16 +302,16 @@ def _load_config_file(path: str, ext: str = None) -> dict:
     if ext == ".toml":
         if is_tomllib:  ## python 3.11+ have toml in the core libraries
             with open(path, "rb") as fp:
-                return tomllib.load(fp)
+                return Config.from_dict(tomllib.load(fp))
         else:  ## python <3.11 need the toml library
-            return toml.load(path)
+            return Config.from_dict(toml.load(path))
     elif ext == ".json":
         with open(path, "r") as fp:
-            return json.load(fp)
+            return Config.from_dict(json.load(fp))
     elif ext == ".ini":
         cfg_parser = configparser.ConfigParser()
         cfg_parser.read(path)
-        return cfg_parser
+        return Config.from_dict(cfg_parser)
     elif ext == ".yaml":
         if not has_yaml:
             raise Exception(
@@ -287,11 +319,11 @@ def _load_config_file(path: str, ext: str = None) -> dict:
                 "install it with 'pip install pyyaml' or 'pip install pi-conf[yaml]"
             )
         with open(path, "r") as fp:
-            return yaml.safe_load(fp)
+            return Config.from_dict(yaml.safe_load(fp))
 
 
-def read_config_dir(config_file_or_appname: str) -> Config:
-    """Read the config.toml file from the config directory
+def _find_config(config_file_or_appname: str) -> str:
+    """Find the config file from the config directory
         This will be read the first config found in following directories.
         If multiple config files are found, the first one will be used,
         in this order toml|json|ini|yaml
@@ -303,7 +335,7 @@ def read_config_dir(config_file_or_appname: str) -> Config:
         config_file_or_appname (str): App name for choosing the config directory
 
     Returns:
-        AttrDict: the parsed config file in a dict format
+        str: the path to the config file
     """
     check_order = [
         config_file_or_appname,
@@ -315,14 +347,10 @@ def read_config_dir(config_file_or_appname: str) -> Config:
             potential_config = potential_config.replace("<ext>", extension)
             potential_config = os.path.expanduser(potential_config)
             if os.path.isfile(potential_config):
-                log.debug(f"p-config::config.py: Using '{potential_config}'")
-                cfg = _load_config_file(potential_config)
-                cfg = Config.from_dict(cfg)
-                get_pmanager().set(cfg, Provenance(potential_config))
-
-                return cfg
-    log.debug(f"No config file found. Using blank config")
-    return Config()
+                log.debug(f"Found config: '{potential_config}'")
+                return potential_config
+    log.debug(f"No config file found.")
+    return None
 
 
 def update_config(appname_path_dict: str | dict) -> Config:
@@ -345,20 +373,25 @@ def update_config(appname_path_dict: str | dict) -> Config:
     return cfg
 
 
-def set_config(appname_path_dict: str | dict) -> Config:
+def set_config(appname_path_dict: str | dict, create_if_not_exists: bool = True) -> Config:
     """Sets the global config.toml to use based on the given appname | path | dict
 
     Args:
         appname_path_dict (str): Set the config from an appname | path | dict
-        Can be passed with the following.
-            Dict: updates cfg with the given dict
-            str: a path to a (.toml|.json|.ini|.yaml) file
-            str: appname to search for the config.toml in the the application config dir
+            Can be passed with the following.
+                Dict: updates cfg with the given dict
+                str: a path to a (.toml|.json|.ini|.yaml) file
+                str: appname to search for the config.toml in the the application config dir
+        create_if_not_exists (bool): If True, and appname_path_dict is a path, create the config file if it doesn't exist
 
     Returns:
         Config: A config object (an attribute dictionary)
     """
     cfg.clear()
+    if create_if_not_exists and isinstance(appname_path_dict, str):
+        if not os.path.isfile(appname_path_dict):
+            with open(appname_path_dict, "w") as fp:
+                fp.write("")
 
     return update_config(appname_path_dict)
 
@@ -379,7 +412,10 @@ def load_config(appname_path_dict: str | dict) -> Config:
     if isinstance(appname_path_dict, dict):
         newcfg = Config.from_dict(appname_path_dict)
     else:
-        newcfg = read_config_dir(appname_path_dict)
+        path = _find_config(appname_path_dict)
+        newcfg = _load_config_file(path)
+        get_pmanager().set(newcfg, Provenance(path))
+
     return newcfg
 
 
