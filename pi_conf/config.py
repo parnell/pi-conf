@@ -373,7 +373,11 @@ def update_config(appname_path_dict: str | dict) -> Config:
     return cfg
 
 
-def set_config(appname_path_dict: str | dict, create_if_not_exists: bool = True) -> Config:
+def set_config(
+    appname_path_dict: str | dict,
+    create_if_not_exists: bool = True,
+    create_with_extension=".toml",
+) -> Config:
     """Sets the global config.toml to use based on the given appname | path | dict
 
     Args:
@@ -383,13 +387,17 @@ def set_config(appname_path_dict: str | dict, create_if_not_exists: bool = True)
                 str: a path to a (.toml|.json|.ini|.yaml) file
                 str: appname to search for the config.toml in the the application config dir
         create_if_not_exists (bool): If True, and appname_path_dict is a path, create the config file if it doesn't exist
+        create_with_extension (str): The extension to use if creating the config file
 
     Returns:
         Config: A config object (an attribute dictionary)
     """
     cfg.clear()
     if create_if_not_exists and isinstance(appname_path_dict, str):
-        if not os.path.isfile(appname_path_dict):
+        path = _find_config(appname_path_dict)
+        if path is None:
+            path = f"{site_config_dir(appname=appname_path_dict)}/config.{create_with_extension}"
+            log.info(f"Creating config file at '{path}' for appname '{appname_path_dict}'")
             with open(appname_path_dict, "w") as fp:
                 fp.write("")
 
