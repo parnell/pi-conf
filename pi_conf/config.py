@@ -3,7 +3,7 @@ import configparser
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Iterable
 
 from pi_conf.provenance import Provenance
 from pi_conf.provenance import get_provenance_manager as get_pmanager
@@ -39,11 +39,15 @@ _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, fun
 def _is_iterable(obj):
     try:
         if isinstance(obj, str):
-            return False
+            return False, None
+        elif isinstance(obj, dict):
+            return True, dict
+        elif isinstance(obj, list):
+            return True, list
         iter(obj)
-        return True
+        return True, None
     except TypeError:
-        return False
+        return False, None
 
 
 class AttrDict(dict):
@@ -74,45 +78,67 @@ class AttrDict(dict):
 
     def to_env(
         self,
-        d: dict[str, Any] = None,
+        d: str | list[Any] | dict[str, Any] | Iterable = None,
         recursive: bool = True,
         ignore_complications: bool = True,
         prefix: str = "",
+        order: int = None,
         to_upper: bool = True,
         overwrite: bool = False,
+        path: list = None,
     ) -> list[str, Any]:
         """recursively export the config to environment variables
         with the keys as prefixes"""
+        if not path:
+            path = []
         added_envs = []
         if d is None:
             d = self
-        for k, v in d.items():
-            is_iterable = _is_iterable(v)
-            if recursive and isinstance(v, dict):
+        is_iterable, iterable_type = _is_iterable(d)
+        if not is_iterable:
+            v = json.dumps(d) if not isinstance(d, str) else d
+
+            newk = "_".join(path)
+            if to_upper:
+                newk = newk.upper()
+            if not os.environ.get(newk) or overwrite:
+                os.environ[newk] = v
+                added_envs.append((newk, v))
+        elif iterable_type == dict:
+            for k, v in d.items():
+                np = path.copy()
+                order_str = f"{order}" if order is not None else ""
+                np.append(f"{k}{order_str}")
                 a = self.to_env(
                     d=v,
                     recursive=recursive,
                     ignore_complications=ignore_complications,
-                    prefix=f"{k}_",
+                    prefix=f"{prefix}{k}",
                     to_upper=to_upper,
                     overwrite=overwrite,
+                    path=np,
                 )
                 added_envs.extend(a)
-            elif not ignore_complications and is_iterable:
-                raise Exception(
-                    f"Error! Cannot export iterable to environment variable '{k}' with value {v}"
+        elif iterable_type == list:
+            for i, v in enumerate(d):
+                np = path.copy()
+                # np.append(f"{key}{i}")
+                a = self.to_env(
+                    d=v,
+                    recursive=recursive,
+                    ignore_complications=ignore_complications,
+                    prefix=f"{prefix}",
+                    order=i,
+                    to_upper=to_upper,
+                    overwrite=overwrite,
+                    path=np,
                 )
-            else:
-                if to_upper:
-                    newk = f"{prefix}{k}".upper()
-                if os.environ.get(newk) and not overwrite:
-                    continue
-                if is_iterable:
-                    nv = json.dumps(v)
-                else:
-                    nv = str(v)
-                os.environ[newk] = nv
-                added_envs.append((newk, nv))
+                added_envs.extend(a)
+        elif not ignore_complications and is_iterable:
+            raise Exception(
+                f"Error! Cannot export iterable to environment variable '{k}' with value {v}"
+            )
+
         return added_envs
 
     @classmethod

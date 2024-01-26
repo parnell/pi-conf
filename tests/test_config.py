@@ -108,6 +108,34 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(cfg["a"], 1)
         self.assertEqual(cfg.get("a"), 1)
 
+    def test_to_env_list(self):
+        from pi_conf import Config
+
+        cfg = Config({"a": [{"b": 1}, {"b": 2}]})
+        envs = cfg.to_env(overwrite=True)
+        self.assertEqual(envs, [("A_B0", "1"), ("A_B1", "2")])
+
+    def test_to_env_list_dict(self):
+        from pi_conf import Config
+
+        cfg = Config({"a": [{"b": 1}, {"b": {"c": 2}}]})
+        envs = cfg.to_env(overwrite=True)
+        self.assertEqual(envs, [("A_B0", "1"), ("A_B1_C", "2")])
+
+    def test_to_env_dict(self):
+        from pi_conf import Config
+
+        cfg = Config({"a": {"b": 1, "c": {"d": 2}}})
+        envs = cfg.to_env(overwrite=True)
+        self.assertEqual(envs, [("A_B", "1"), ("A_C_D", "2")])
+
+    def test_to_env_str(self):
+        from pi_conf import Config
+
+        cfg = Config({"a": 1, "b": "2"})
+        envs = cfg.to_env(overwrite=True)
+        self.assertEqual(envs, [("A", "1"), ("B", "2")])
+
 
 if __name__ == "__main__":
     test_file = ""
