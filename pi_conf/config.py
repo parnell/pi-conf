@@ -36,6 +36,16 @@ log = logging.getLogger(__name__)
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
+def _is_iterable(obj):
+    try:
+        if isinstance(obj, str):
+            return False
+        iter(obj)
+        return True
+    except TypeError:
+        return False
+
+
 class AttrDict(dict):
     """A dictionary class that allows referencing by attribute
     Example:
@@ -70,23 +80,16 @@ class AttrDict(dict):
         prefix: str = "",
         to_upper: bool = True,
         overwrite: bool = False,
-    ):
-        def _is_iterable(obj):
-            try:
-                if isinstance(obj, str):
-                    return False
-                iter(obj)
-                return True
-            except TypeError:
-                return False
-
-        """recursively export the config to environment variables with the keys as prefixes"""
+    ) -> list[str, Any]:
+        """recursively export the config to environment variables
+        with the keys as prefixes"""
+        added_envs = []
         if d is None:
             d = self
         for k, v in d.items():
             is_iterable = _is_iterable(v)
             if recursive and isinstance(v, dict):
-                self.to_env(
+                a = self.to_env(
                     d=v,
                     recursive=recursive,
                     ignore_complications=ignore_complications,
@@ -94,6 +97,7 @@ class AttrDict(dict):
                     to_upper=to_upper,
                     overwrite=overwrite,
                 )
+                added_envs.extend(a)
             elif not ignore_complications and is_iterable:
                 raise Exception(
                     f"Error! Cannot export iterable to environment variable '{k}' with value {v}"
@@ -108,6 +112,8 @@ class AttrDict(dict):
                 else:
                     nv = str(v)
                 os.environ[newk] = nv
+                added_envs.append((newk, nv))
+        return added_envs
 
     @classmethod
     def _from_dict(
