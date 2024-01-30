@@ -113,14 +113,14 @@ class TestConfig(unittest.TestCase):
 
         cfg = Config({"a": [{"b": 1}, {"b": 2}]})
         envs = cfg.to_env(overwrite=True)
-        self.assertEqual(envs, [("A_B0", "1"), ("A_B1", "2")])
+        self.assertEqual(envs, [("A0_B", "1"), ("A1_B", "2")])
 
     def test_to_env_list_dict(self):
         from pi_conf import Config
 
         cfg = Config({"a": [{"b": 1}, {"b": {"c": 2}}]})
         envs = cfg.to_env(overwrite=True)
-        self.assertEqual(envs, [("A_B0", "1"), ("A_B1_C", "2")])
+        self.assertEqual(envs, [("A0_B", "1"), ("A1_B_C", "2")])
 
     def test_to_env_dict(self):
         from pi_conf import Config

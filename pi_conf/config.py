@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from typing import Any, Iterable
+from pydantic import BaseModel
 
 from pi_conf.provenance import Provenance
 from pi_conf.provenance import get_provenance_manager as get_pmanager
@@ -76,19 +77,47 @@ class AttrDict(dict):
             else:
                 self[m] = getattr(self, m)
 
+
     def to_env(
+        self,
+        d: dict[str, Any],
+        recursive: bool = True,
+        to_upper: bool = True,
+        overwrite: bool = False,
+        ignore_complications: bool = True,
+    ) -> list[str, Any]:
+        """recursively export the config to environment variables
+        with the keys as prefixes
+        args:
+            d (dict): The dictionary to convert to an AttrDict
+            recursive (bool): If True, recursively convert the dictionary to environment variables
+            to_upper (bool): If True, convert the keys to uppercase
+            overwrite (bool): If True, overwrite existing environment variables
+            ignore_complications (bool): If True, ignore any complications in the dictionary
+        returns:
+            list: A list of tuples of the environment variables added
+        """
+        return self._to_env(
+            d=d,
+            recursive=recursive,
+            to_upper=to_upper,
+            overwrite=overwrite,
+            ignore_complications=ignore_complications,
+        )
+
+    def _to_env(
         self,
         d: str | list[Any] | dict[str, Any] | Iterable = None,
         recursive: bool = True,
-        ignore_complications: bool = True,
-        prefix: str = "",
-        order: int = None,
         to_upper: bool = True,
         overwrite: bool = False,
+        ignore_complications: bool = True,
+        prefix: str = "",
         path: list = None,
     ) -> list[str, Any]:
         """recursively export the config to environment variables
-        with the keys as prefixes"""
+        with the keys as prefixes
+        """
         if not path:
             path = []
         added_envs = []
@@ -107,30 +136,27 @@ class AttrDict(dict):
         elif iterable_type == dict:
             for k, v in d.items():
                 np = path.copy()
-                order_str = f"{order}" if order is not None else ""
-                np.append(f"{k}{order_str}")
-                a = self.to_env(
+                np.append(k)
+                a = self._to_env(
                     d=v,
                     recursive=recursive,
-                    ignore_complications=ignore_complications,
-                    prefix=f"{prefix}{k}",
                     to_upper=to_upper,
                     overwrite=overwrite,
+                    ignore_complications=ignore_complications,
+                    prefix=f"{prefix}{k}",
                     path=np,
                 )
                 added_envs.extend(a)
         elif iterable_type == list:
             for i, v in enumerate(d):
-                np = path.copy()
-                # np.append(f"{key}{i}")
-                a = self.to_env(
+                np = path[:-1].copy()
+                np.append(f"{prefix}{i}")
+                a = self._to_env(
                     d=v,
                     recursive=recursive,
-                    ignore_complications=ignore_complications,
-                    prefix=f"{prefix}",
-                    order=i,
                     to_upper=to_upper,
                     overwrite=overwrite,
+                    ignore_complications=ignore_complications,
                     path=np,
                 )
                 added_envs.extend(a)
