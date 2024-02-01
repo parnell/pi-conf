@@ -475,8 +475,13 @@ def load_config(appname_path_dict: str | dict) -> Config:
         newcfg = Config.from_dict(appname_path_dict)
     else:
         path = _find_config(appname_path_dict)
-        newcfg = _load_config_file(path)
-        get_pmanager().set(newcfg, Provenance(path))
+        if path is None:
+            log.warning(f"No config file found for appname '{appname_path_dict}'")
+            log.warning(f"You can create a config file at '{site_config_dir(appname=appname_path_dict)}'")
+            newcfg = Config.from_dict({})
+        else:
+            newcfg = _load_config_file(path)
+            get_pmanager().set(newcfg, Provenance(path))
 
     return newcfg
 
