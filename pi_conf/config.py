@@ -4,7 +4,6 @@ import json
 import logging
 import os
 from typing import Any, Iterable
-from pydantic import BaseModel
 
 from pi_conf.provenance import Provenance
 from pi_conf.provenance import get_provenance_manager as get_pmanager
@@ -77,10 +76,8 @@ class AttrDict(dict):
             else:
                 self[m] = getattr(self, m)
 
-
     def to_env(
         self,
-        d: dict[str, Any],
         recursive: bool = True,
         to_upper: bool = True,
         overwrite: bool = False,
@@ -98,7 +95,6 @@ class AttrDict(dict):
             list: A list of tuples of the environment variables added
         """
         return self._to_env(
-            d=d,
             recursive=recursive,
             to_upper=to_upper,
             overwrite=overwrite,
