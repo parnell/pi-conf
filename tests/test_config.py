@@ -3,6 +3,8 @@ import sys
 import tempfile
 import unittest
 
+from platformdirs import site_config_dir
+
 from pi_conf.config import _load_config_file
 
 basedir = os.path.abspath(os.getcwd())
@@ -136,9 +138,22 @@ class TestConfig(unittest.TestCase):
         envs = cfg.to_env(overwrite=True)
         self.assertEqual(envs, [("A", "1"), ("B", "2")])
 
+    def test_set_config_not_exists(self):
+        from pi_conf import load_config, set_config
+
+        with tempfile.TemporaryDirectory() as d:
+            bn = os.path.basename(d)
+            set_config(bn, config_directories=[d])
+            with open(os.path.join(d, "config.toml"), "w") as f:
+                f.write("a = 1")
+                f.flush()
+
+            cfg = load_config(bn, config_directories=[d])
+            self.assertEqual(cfg.a, 1)
+
 
 if __name__ == "__main__":
-    test_file = ""
+    test_file = "test_set_config_not_exists"
     if test_file:
         suite = unittest.TestSuite()
         suite.addTest(TestConfig(test_file))

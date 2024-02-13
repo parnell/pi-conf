@@ -38,4 +38,7 @@ cachedir
 ## temp files
 *.bk.*
 
+## VSCode
+*.vscode
+
 poetry.lock

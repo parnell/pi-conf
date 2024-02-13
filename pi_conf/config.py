@@ -1,4 +1,5 @@
 """Config"""
+
 import configparser
 import json
 import logging
@@ -376,7 +377,7 @@ def _load_config_file(path: str, ext: str = None) -> Config:
             return Config.from_dict(yaml.safe_load(fp))
 
 
-def _find_config(config_file_or_appname: str) -> str:
+def _find_config(config_file_or_appname: str, config_directories: str | list = None) -> str:
     """Find the config file from the config directory
         This will be read the first config found in following directories.
         If multiple config files are found, the first one will be used,
@@ -391,11 +392,19 @@ def _find_config(config_file_or_appname: str) -> str:
     Returns:
         str: the path to the config file
     """
-    check_order = [
-        config_file_or_appname,
-        f"~/.config/{config_file_or_appname}/config.<ext>",
-        f"{site_config_dir(appname=config_file_or_appname)}/config.<ext>",
-    ]
+    if config_directories is None:
+        check_order = [
+            config_file_or_appname,
+            f"~/.config/{config_file_or_appname}/config.<ext>",
+            f"{site_config_dir(appname=config_file_or_appname)}/config.<ext>",
+        ]
+    elif isinstance(config_directories, str):
+        config_directories = os.path.expanduser(config_directories)
+        check_order = [
+            f"{config_directories}/config.<ext>",
+        ]
+    else:
+        check_order = [f"{os.path.expanduser(d)}/config.<ext>" for d in config_directories]
     for potential_config in check_order:
         for extension in ["toml", "json", "ini", "yaml"]:
             potential_config = potential_config.replace("<ext>", extension)
@@ -407,7 +416,7 @@ def _find_config(config_file_or_appname: str) -> str:
     return None
 
 
-def update_config(appname_path_dict: str | dict) -> Config:
+def update_config(appname_path_dict: str | dict, config_directories: str | list[str]) -> Config:
     """Update the global config with another config
 
     Args:
@@ -420,7 +429,7 @@ def update_config(appname_path_dict: str | dict) -> Config:
     Returns:
         Config: A config object (an attribute dictionary)
     """
-    newcfg = load_config(appname_path_dict)
+    newcfg = load_config(appname_path_dict, config_directories=config_directories)
     cfg.update(newcfg, _add_to_provenance=False)
     get_pmanager().extend(cfg, newcfg.provenance)
     get_pmanager().delete(newcfg)
@@ -431,6 +440,7 @@ def set_config(
     appname_path_dict: str | dict,
     create_if_not_exists: bool = True,
     create_with_extension=".toml",
+    config_directories: str | list = None,
 ) -> Config:
     """Sets the global config.toml to use based on the given appname | path | dict
 
@@ -448,17 +458,31 @@ def set_config(
     """
     cfg.clear()
     if create_if_not_exists and isinstance(appname_path_dict, str):
-        path = _find_config(appname_path_dict)
+        path = _find_config(appname_path_dict, config_directories=config_directories)
         if path is None:
-            path = f"{site_config_dir(appname=appname_path_dict)}/config.{create_with_extension}"
+            if not isinstance(appname_path_dict, str):
+                raise Exception("Error! appname_path_dict must be a string to create a config file")
+            
+            if config_directories is not None:
+                if isinstance(config_directories, str):
+                    config_directories = [config_directories]
+                path = config_directories[0]
+            else:
+                path = site_config_dir(appname=appname_path_dict)
+            path = os.path.join(path, appname_path_dict, f"config{create_with_extension}")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
             log.info(f"Creating config file at '{path}' for appname '{appname_path_dict}'")
-            with open(appname_path_dict, "w") as fp:
+            with open(path, "w") as fp:
                 fp.write("")
+            config_directories = [os.path.dirname(path)]
+    return update_config(appname_path_dict, config_directories=config_directories)
 
-    return update_config(appname_path_dict)
 
-
-def load_config(appname_path_dict: str | dict) -> Config:
+def load_config(
+    appname_path_dict: str | dict,
+    config_directories: str | list = None,
+) -> Config:
     """Loads a config based on the given appname | path | dict
 
     Args:
@@ -474,10 +498,12 @@ def load_config(appname_path_dict: str | dict) -> Config:
     if isinstance(appname_path_dict, dict):
         newcfg = Config.from_dict(appname_path_dict)
     else:
-        path = _find_config(appname_path_dict)
+        path = _find_config(appname_path_dict, config_directories=config_directories)
         if path is None:
             log.warning(f"No config file found for appname '{appname_path_dict}'")
-            log.warning(f"You can create a config file at '{site_config_dir(appname=appname_path_dict)}'")
+            log.warning(
+                f"You can create a config file at '{site_config_dir(appname=appname_path_dict)}'"
+            )
             newcfg = Config.from_dict({})
         else:
             newcfg = _load_config_file(path)
