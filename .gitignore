@@ -37,7 +37,7 @@ cachedir
 
 ## temp files
 *.bk.*
-
+* copy.py*
 ## VSCode
 *.vscode
 
