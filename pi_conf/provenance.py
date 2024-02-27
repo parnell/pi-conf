@@ -6,23 +6,23 @@ from dataclasses import dataclass, field
 
 log = logging.getLogger(__name__)
 
+PROVENANCE_DEPTH = 2
 
-@dataclass
+
 class Provenance:
     """Provenance of the config"""
 
-    def __init__(self, source: str, stack: str = None):
+    def __init__(self, source: str, stack: list[str] = None):
+        self.source = source
         self.stack = stack
         if self.stack is None:
-            self.stack = _provenance_manager.get_method_that_called_this_method()
-        self.source = source
+            self.stack = _provenance_manager.get_methods_that_called_this_method(PROVENANCE_DEPTH)
 
     def __repr__(self):
         return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
 
     def __str__(self):
         return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
-
 
 @dataclass
 class ProvenanceManager:
@@ -83,23 +83,24 @@ class ProvenanceManager:
             pass
 
     @staticmethod
-    def get_method_that_called_this_method() -> str:
+    def get_methods_that_called_this_method(depth: int = None) -> str:
         """Get the method that called this method"""
         try:
             stack = []
             for i in range(len(inspect.stack())):
                 frame = inspect.stack()[i]
-                module = inspect.getmodule(frame[0])
-                module_path = os.path.abspath(module.__file__)
+                lineno = frame.lineno
+                module_path = frame.filename
                 base_name = os.path.basename(module_path)
                 n = os.path.basename(os.path.dirname(module_path))
+                if n == "pi_conf":
+                    continue
                 fn = frame.function
-                stack.append(f"{base_name}::{fn}")
-                # print(f"{i}           {base_name}::{fn}")
-                if n != "pi_conf":
-                    break
-            # print("######", " -> ".join(stack))
-            return " -> ".join(stack[-2:][::-1])
+                stack.append(f"{base_name}::{fn}:{lineno}")
+            if depth is not None:
+                return stack[-depth:][::-1]
+            return stack[::-1]
+
         except Exception as e:
             log.error(f"Error! {e}")
             return "Unknown"
@@ -135,7 +136,7 @@ class NullOpProvenanceManager(ProvenanceManager):
         """Delete the provenance of the given object"""
 
     @staticmethod
-    def get_method_that_called_this_method() -> str:
+    def get_methods_that_called_this_method() -> str:
         """Get the method that called this method"""
         return "Unknown"
 
