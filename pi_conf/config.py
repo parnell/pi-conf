@@ -77,6 +77,16 @@ class AttrDict(dict):
             else:
                 self[m] = getattr(self, m)
 
+    def update(self, *args, **kwargs):
+        """Update the config with another dict"""
+        if "_no_attrdict" in kwargs:
+            kwargs.pop("_no_attrdict")
+            super().update(*args, **kwargs)
+            return
+
+        super().update(*args, **kwargs)
+        AttrDict._from_dict(self, _depth=0, inline=True)
+
     def to_env(
         self,
         recursive: bool = True,
@@ -166,7 +176,11 @@ class AttrDict(dict):
 
     @classmethod
     def _from_dict(
-        cls: "AttrDict", d: dict, _nested_same_class: bool = False, _depth: int = 0
+        cls: "AttrDict",
+        d: dict,
+        _nested_same_class: bool = False,
+        _depth: int = 0,
+        inline: bool = False,
     ) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a dict
@@ -198,7 +212,8 @@ class AttrDict(dict):
                     new_l.append(pot_dict)
             return new_l
 
-        d = cls(**d)
+        if not inline:
+            d = cls(**d)
         for k, v in d.items():
             if k in _attr_dict_dont_overwrite:
                 raise Exception(f"Error! config key={k} would overwrite a default dict attr/func")
@@ -462,7 +477,7 @@ def set_config(
         if path is None:
             if not isinstance(appname_path_dict, str):
                 raise Exception("Error! appname_path_dict must be a string to create a config file")
-            
+
             if config_directories is not None:
                 if isinstance(config_directories, str):
                     config_directories = [config_directories]
@@ -471,7 +486,7 @@ def set_config(
                 path = site_config_dir(appname=appname_path_dict)
             path = os.path.join(path, appname_path_dict, f"config{create_with_extension}")
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            
+
             log.info(f"Creating config file at '{path}' for appname '{appname_path_dict}'")
             with open(path, "w") as fp:
                 fp.write("")
