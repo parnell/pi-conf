@@ -517,6 +517,7 @@ def set_config(
 def load_config(
     appname_path_dict: str | dict,
     config_directories: str | list = None,
+    ignore_warnings: bool = False,
 ) -> Config:
     """Loads a config based on the given appname | path | dict
 
@@ -535,10 +536,11 @@ def load_config(
     else:
         path = _find_config(appname_path_dict, config_directories=config_directories)
         if path is None:
-            log.warning(f"No config file found for appname '{appname_path_dict}'")
-            log.warning(
-                f"You can create a config file at '{site_config_dir(appname=appname_path_dict)}'"
-            )
+            if not ignore_warnings:
+                log.warning(f"No config file found for appname '{appname_path_dict}'")
+                log.warning(
+                    f"You can create a config file at '{site_config_dir(appname=appname_path_dict)}'"
+                )
             newcfg = Config.from_dict({})
         else:
             newcfg = _load_config_file(path)
