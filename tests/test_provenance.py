@@ -5,6 +5,7 @@ import unittest
 
 import pi_conf.config as config
 from pi_conf import Config
+from pi_conf.provenance import ProvenanceOp
 
 basedir = os.path.abspath(os.getcwd())
 sys.path.append(basedir)
@@ -28,16 +29,26 @@ class TestProvenance(unittest.TestCase):
         oid = id(cfg)
         self.assertTrue(oid not in _provenance_manager._enabled)
 
-    def test_provenance(self):
-        cfg = Config.from_dict({"a": 1})
+    def test_provenance_from_dict_directly(self):
+        cfg = Config({"a": 1})
         self.assertEqual(cfg.provenance[-1].source, "dict")
+        self.assertEqual(cfg.provenance[-1].operation, ProvenanceOp.set)
         self.assertEqual(len(cfg.provenance), 1)
 
-    def test_provenance2(self):
+    def test_provenance_from_dict(self):
         cfg = Config.from_dict({"a": 1})
         self.assertEqual(cfg.provenance[-1].source, "dict")
+        self.assertEqual(cfg.provenance[-1].operation, ProvenanceOp.set)
+        self.assertEqual(len(cfg.provenance), 1)
+
+    def test_proventest_provenance_from_dict2(self):
+        cfg = Config.from_dict({"a": 1})
+        self.assertEqual(cfg.provenance[-1].source, "dict")
+        self.assertEqual(cfg.provenance[-1].operation, ProvenanceOp.set)
         cfg.update({"b": 2})
         self.assertEqual(cfg.provenance[-1].source, "dict")
+        self.assertEqual(cfg.provenance[-1].operation, ProvenanceOp.update)
+
         self.assertEqual(len(cfg.provenance), 2)
 
     def test_provenance_from_set_config(self):
@@ -53,6 +64,7 @@ class TestProvenance(unittest.TestCase):
 
             self.assertEqual(len(cfg.provenance), 1)
             self.assertEqual(cfg.provenance[0].source, f.name)
+            self.assertEqual(cfg.provenance[0].operation, ProvenanceOp.set)
 
     def test_provenance_from_load_config(self):
         s = """
@@ -70,4 +82,10 @@ class TestProvenance(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    testmethod = ""
+    if testmethod:
+        suite = unittest.TestSuite()
+        suite.addTest(TestProvenance(testmethod))
+        unittest.TextTestRunner().run(suite)
+    else:
+        unittest.main()

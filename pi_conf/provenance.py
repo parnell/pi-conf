@@ -3,26 +3,37 @@ import logging
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
+from enum import Enum
 
 log = logging.getLogger(__name__)
 
 PROVENANCE_DEPTH = 2
 
+class ProvenanceOp(str, Enum):
+    set = "set"
+    update = "update"
+    clear = "clear"
+    clear_and_set = "clear_and_set"
+
+    def __str__(self):
+        return self.value
 
 class Provenance:
     """Provenance of the config"""
 
-    def __init__(self, source: str, stack: list[str] = None):
+    def __init__(self, source: str, operation: str, stack: list[str] = None):
         self.source = source
         self.stack = stack
+        self.operation = operation
         if self.stack is None:
             self.stack = _provenance_manager.get_methods_that_called_this_method(PROVENANCE_DEPTH)
 
     def __repr__(self):
-        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
+        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}' op='{self.operation}'>"
 
     def __str__(self):
-        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'>"
+        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'> op='{self.operation}'"
+
 
 @dataclass
 class ProvenanceManager:
