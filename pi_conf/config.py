@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any, Iterable
 
-from pi_conf.provenance import Provenance
+from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
 
 try:
@@ -301,8 +301,10 @@ class ProvenanceDict(AttrDict):
     def __init__(self, *args, **kwargs):
         enable_provenance = kwargs.pop("enable_provenance", True)
         get_pmanager().set_enabled(self, enable_provenance)
+
         super().__init__(*args, **kwargs)
         self.__dict__ = self
+        get_pmanager().append(self, Provenance("dict", ProvenanceOp.set))
 
     def __post_init__(self):
         ## Iterate over members and add them to the dict
@@ -321,6 +323,26 @@ class ProvenanceDict(AttrDict):
             else:
                 self[m] = getattr(self, m)
 
+    def load_config(
+        self,
+        appname_path_dict: str | dict,
+        config_directories: str | list = None,
+    ) -> None:
+        """Loads a config based on the given appname | path | dict
+
+        Args:
+            appname_path_dict (str): Set the config from an appname | path | dict
+            Can be passed with the following.
+                Dict: updates cfg with the given dict
+                str: a path to a (.toml|.json|.ini|.yaml) file
+                str: appname to search for the config.toml in the the application config dir
+        """
+        newcfg = load_config(appname_path_dict, config_directories=config_directories)
+        self.update(newcfg, _add_to_provenance=False)
+        get_pmanager().extend(self, newcfg.provenance)
+        get_pmanager().delete(newcfg)
+
+
     @property
     def provenance(self) -> list[Provenance]:
         return get_pmanager().get(self)
@@ -334,7 +356,7 @@ class ProvenanceDict(AttrDict):
         _add_to_provenance = kwargs.pop("_add_to_provenance", True)
         super().update(*args, **kwargs)
         if _add_to_provenance:
-            get_pmanager().append(self, Provenance("dict"))
+            get_pmanager().append(self, Provenance("dict", ProvenanceOp.update))
 
     def clear(self) -> None:
         get_pmanager().clear(cfg)
@@ -355,8 +377,6 @@ class ProvenanceDict(AttrDict):
             AttrDict: the AttrDict object, or subclass
         """
         d = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
-        get_pmanager().append(d, Provenance("dict"))
-
         return d
 
 
@@ -522,7 +542,7 @@ def load_config(
             newcfg = Config.from_dict({})
         else:
             newcfg = _load_config_file(path)
-            get_pmanager().set(newcfg, Provenance(path))
+            get_pmanager().set(newcfg, Provenance(path, ProvenanceOp.set))
 
     return newcfg
 

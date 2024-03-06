@@ -150,13 +150,13 @@ class TestConfig(unittest.TestCase):
 
             cfg = load_config(bn, config_directories=[d])
             self.assertEqual(cfg.a, 1)
-    
+
     def test_update_attrdict_with_attrdict(self):
         from pi_conf import AttrDict
 
         d1 = AttrDict({"a": 1, "b": 2})
         d2 = AttrDict({"a": 2, "c": 3})
-        
+
         d1.update(d2)
         self.assertEqual(d1.a, 2)
         self.assertEqual(d1.b, 2)
@@ -167,18 +167,19 @@ class TestConfig(unittest.TestCase):
 
         d1 = AttrDict({"a": 1, "b": 2})
         d2 = {"b": {"a": 2, "c": 3}}
-        
+
         d1.update(d2)
         self.assertEqual(d1.a, 1)
         self.assertEqual(d1.b.a, 2)
         self.assertEqual(d1.b.c, 3)
 
+
+
 if __name__ == "__main__":
-    test_file = ""
+    test_file = "test_set_config_not_exists"
     if test_file:
         suite = unittest.TestSuite()
         suite.addTest(TestConfig(test_file))
-        runner = unittest.TextTestRunner()
-        runner.run(suite)
+        unittest.TextTestRunner().run(suite)
     else:
         unittest.main()
