@@ -4,6 +4,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class ProvenanceOp(str, Enum):
 class Provenance:
     """Provenance of the config"""
 
-    def __init__(self, source: str, operation: str, stack: list[str] = None):
+    def __init__(self, source: str, operation: str, stack: Optional[list[str]] = None):
         self.source = source
         self.stack = stack
         self.operation = operation
@@ -94,7 +95,7 @@ class ProvenanceManager:
             pass
 
     @staticmethod
-    def get_methods_that_called_this_method(depth: int = None) -> str:
+    def get_methods_that_called_this_method(depth: Optional[int] = None) -> str:
         """Get the method that called this method"""
         try:
             stack = []
@@ -147,7 +148,7 @@ class NullOpProvenanceManager(ProvenanceManager):
         """Delete the provenance of the given object"""
 
     @staticmethod
-    def get_methods_that_called_this_method() -> str:
+    def get_methods_that_called_this_method(depth: Optional[int] = None) -> str:
         """Get the method that called this method"""
         return "Unknown"
 

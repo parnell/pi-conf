@@ -4,7 +4,7 @@ import configparser
 import json
 import logging
 import os
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal, Optional
 
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
@@ -28,7 +28,13 @@ try:
     from platformdirs import site_config_dir
 except:
 
-    def site_config_dir(appname):
+    def site_config_dir(
+        appname: str | None = None,
+        appauthor: str | None | Literal[False] = None,
+        version: str | None = None,
+        multipath: bool = False,  # noqa: FBT001, FBT002
+        ensure_exists: bool = False,  # noqa: FBT001, FBT002
+    ) -> str:
         return f"~/.config/{appname}"
 
 
@@ -114,14 +120,14 @@ class AttrDict(dict):
 
     def _to_env(
         self,
-        d: str | list[Any] | dict[str, Any] | Iterable = None,
+        d: Optional[str | list[Any] | dict[str, Any] | Iterable] = None,
         recursive: bool = True,
         to_upper: bool = True,
         overwrite: bool = False,
         ignore_complications: bool = True,
         prefix: str = "",
-        path: list = None,
-    ) -> list[str, Any]:
+        path: Optional[list] = None,
+    ) -> list[str | Any]:
         """recursively export the config to environment variables
         with the keys as prefixes
         """
@@ -176,7 +182,7 @@ class AttrDict(dict):
 
     @classmethod
     def _from_dict(
-        cls: "AttrDict",
+        cls: type["AttrDict"],
         d: dict,
         _nested_same_class: bool = False,
         _depth: int = 0,
@@ -194,7 +200,8 @@ class AttrDict(dict):
         Returns:
             AttrDict: the AttrDict object, or subclass
         """
-        cls = cls if _nested_same_class or _depth == 0 else AttrDict
+        if not (_nested_same_class or _depth == 0):
+            cls = AttrDict
 
         def _from_list_or_tuple(l):
             ### TODO change to generic iterable
@@ -226,7 +233,7 @@ class AttrDict(dict):
         return d
 
     @classmethod
-    def from_dict(cls: "AttrDict", d: dict, _nested_same_class: bool = False) -> "AttrDict":
+    def from_dict(cls: type["AttrDict"], d: dict, _nested_same_class: bool = False) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
@@ -243,7 +250,7 @@ class AttrDict(dict):
 
     @classmethod
     def from_str(
-        cls: "AttrDict",
+        cls: type["AttrDict"],
         config_str: str,
         config_type: str = "toml",
         _nested_same_class: bool = False,
@@ -326,7 +333,7 @@ class ProvenanceDict(AttrDict):
     def load_config(
         self,
         appname_path_dict: str | dict,
-        config_directories: str | list = None,
+        config_directories: Optional[str | list] = None,
     ) -> None:
         """Loads a config based on the given appname | path | dict
 
@@ -341,7 +348,6 @@ class ProvenanceDict(AttrDict):
         self.update(newcfg, _add_to_provenance=False)
         get_pmanager().extend(self, newcfg.provenance)
         get_pmanager().delete(newcfg)
-
 
     @property
     def provenance(self) -> list[Provenance]:
@@ -363,12 +369,12 @@ class ProvenanceDict(AttrDict):
         return super().clear()
 
     @classmethod
-    def from_dict(cls: "AttrDict", d: dict, _nested_same_class: bool = False) -> "AttrDict":
-        """Make an ProvenanceDict object without any keys
+    def from_dict(cls: type["AttrDict"], d: dict, _nested_same_class: bool = False) -> "AttrDict":
+        """Make an AttrDict object without any keys
         that will overwrite the normal functions of a dict
 
         Args:
-            cls (AttrDict): Create a new AttrDict object (or subclass)
+            cls (Type[AttrDict]): Create a new AttrDict object (or subclass)
             d (dict): The dictionary to convert to an AttrDict
             _nested_same_class (bool): If True, nested dicts will be the subclass,
                 else they will be AttrDict
@@ -410,9 +416,10 @@ def _load_config_file(path: str, ext: str = None) -> Config:
             )
         with open(path, "r") as fp:
             return Config.from_dict(yaml.safe_load(fp))
+    raise Exception(f"Error! Unknown config file extension '{ext}'")
 
 
-def _find_config(config_file_or_appname: str, config_directories: str | list = None) -> str:
+def _find_config(config_file_or_appname: str, config_directories: Optional[str | list] = None) -> Optional[str]:
     """Find the config file from the config directory
         This will be read the first config found in following directories.
         If multiple config files are found, the first one will be used,
@@ -475,7 +482,7 @@ def set_config(
     appname_path_dict: str | dict,
     create_if_not_exists: bool = True,
     create_with_extension=".toml",
-    config_directories: str | list = None,
+    config_directories: Optional[str | list] = None,
 ) -> Config:
     """Sets the global config.toml to use based on the given appname | path | dict
 
@@ -516,7 +523,7 @@ def set_config(
 
 def load_config(
     appname_path_dict: str | dict,
-    config_directories: str | list = None,
+    config_directories: Optional[str | list] = None,
     ignore_warnings: bool = False,
 ) -> Config:
     """Loads a config based on the given appname | path | dict
