@@ -4,7 +4,7 @@ import configparser
 import json
 import logging
 import os
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Iterable, Literal, Optional, cast
 
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
-def _is_iterable(obj):
+def _is_iterable_with_type(obj):
     try:
         if isinstance(obj, str):
             return False, None
@@ -82,6 +82,12 @@ class AttrDict(dict):
                 self[m] = nd
             else:
                 self[m] = getattr(self, m)
+
+    def __getattribute__(self, name: str) -> Any:
+        """Get an attribute from the dictionary.
+        This will allow you to access the dictionary keys as attributes.
+        Returning Any removes MyPy errors."""
+        return super().__getattribute__(name)
 
     def update(self, *args, **kwargs):
         """Update the config with another dict"""
@@ -136,7 +142,7 @@ class AttrDict(dict):
         added_envs = []
         if d is None:
             d = self
-        is_iterable, iterable_type = _is_iterable(d)
+        is_iterable, iterable_type = _is_iterable_with_type(d)
         if not is_iterable:
             v = json.dumps(d) if not isinstance(d, str) else d
 
@@ -147,6 +153,7 @@ class AttrDict(dict):
                 os.environ[newk] = v
                 added_envs.append((newk, v))
         elif iterable_type == dict:
+            d = cast(dict[str, Any], d)
             for k, v in d.items():
                 np = path.copy()
                 np.append(k)
@@ -419,7 +426,9 @@ def _load_config_file(path: str, ext: str = None) -> Config:
     raise Exception(f"Error! Unknown config file extension '{ext}'")
 
 
-def _find_config(config_file_or_appname: str, config_directories: Optional[str | list] = None) -> Optional[str]:
+def _find_config(
+    config_file_or_appname: str, config_directories: Optional[str | list] = None
+) -> Optional[str]:
     """Find the config file from the config directory
         This will be read the first config found in following directories.
         If multiple config files are found, the first one will be used,
