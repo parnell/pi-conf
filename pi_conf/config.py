@@ -488,7 +488,7 @@ def update_config(appname_path_dict: str | dict, config_directories: str | list[
 
 
 def set_config(
-    appname_path_dict: str | dict,
+    appname_path_dict: Optional[str | dict],
     create_if_not_exists: bool = True,
     create_with_extension=".toml",
     config_directories: Optional[str | list] = None,
@@ -507,6 +507,9 @@ def set_config(
     Returns:
         Config: A config object (an attribute dictionary)
     """
+    if appname_path_dict is None:
+        appname_path_dict = ".config.toml"
+
     cfg.clear()
     if create_if_not_exists and isinstance(appname_path_dict, str):
         path = _find_config(appname_path_dict, config_directories=config_directories)
@@ -531,7 +534,7 @@ def set_config(
 
 
 def load_config(
-    appname_path_dict: str | dict,
+    appname_path_dict: Optional[str | dict],
     config_directories: Optional[str | list] = None,
     ignore_warnings: bool = False,
 ) -> Config:
@@ -547,6 +550,8 @@ def load_config(
     Returns:
         Config: A config object (an attribute dictionary)
     """
+    if appname_path_dict is None:
+        appname_path_dict = ".config.toml"
     if isinstance(appname_path_dict, dict):
         newcfg = Config.from_dict(appname_path_dict)
     else:
