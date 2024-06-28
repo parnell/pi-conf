@@ -1,6 +1,6 @@
 
 test::
-	python -m unittest
+	pytest tests
 
 build::
 	poetry build
