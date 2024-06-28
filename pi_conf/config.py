@@ -397,7 +397,7 @@ class Config(ProvenanceDict):
     pass
 
 
-def _load_config_file(path: str, ext: str = None) -> Config:
+def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
     """Load a config file from the given path"""
     if ext is None:
         __, ext = os.path.splitext(path)
@@ -488,7 +488,7 @@ def update_config(appname_path_dict: str | dict, config_directories: str | list[
 
 
 def set_config(
-    appname_path_dict: Optional[str | dict],
+    appname_path_dict: Optional[str | dict] = None,
     create_if_not_exists: bool = True,
     create_with_extension=".toml",
     config_directories: Optional[str | list] = None,
@@ -534,7 +534,7 @@ def set_config(
 
 
 def load_config(
-    appname_path_dict: Optional[str | dict],
+    appname_path_dict: Optional[str | dict] = None,
     config_directories: Optional[str | list] = None,
     ignore_warnings: bool = False,
 ) -> Config:
