@@ -4,7 +4,7 @@ import configparser
 import json
 import logging
 import os
-from typing import Any, Iterable, Literal, Optional, cast
+from typing import Any, Iterable, Literal, Optional, cast, TypeVar
 
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
@@ -21,7 +21,7 @@ try:  ## python 3.11+ have toml in the core libraries
 
     is_tomllib = True
 except:  ## python <3.11 need the toml library
-    import toml
+    import toml # type: ignore
 
     is_tomllib = False
 try:
@@ -37,6 +37,8 @@ except:
     ) -> str:
         return f"~/.config/{appname}"
 
+
+T = TypeVar("T", bound="AttrDict")
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +107,7 @@ class AttrDict(dict):
         to_upper: bool = True,
         overwrite: bool = False,
         ignore_complications: bool = True,
-    ) -> list[str, Any]:
+    ) -> list[str | Any]:
         """recursively export the config to environment variables
         with the keys as prefixes
         args:
@@ -139,7 +141,7 @@ class AttrDict(dict):
         """
         if not path:
             path = []
-        added_envs = []
+        added_envs: list[str | Any] = []
         if d is None:
             d = self
         is_iterable, iterable_type = _is_iterable_with_type(d)
@@ -181,20 +183,18 @@ class AttrDict(dict):
                 )
                 added_envs.extend(a)
         elif not ignore_complications and is_iterable:
-            raise Exception(
-                f"Error! Cannot export iterable to environment variable '{k}' with value {v}"
-            )
+            raise Exception(f"Error! Cannot export iterable to environment variable d={d}")
 
         return added_envs
 
     @classmethod
     def _from_dict(
-        cls: type["AttrDict"],
+        cls: type[T],
         d: dict,
         _nested_same_class: bool = False,
         _depth: int = 0,
         inline: bool = False,
-    ) -> "AttrDict":
+    ) -> T:
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a dict
 
@@ -279,9 +279,9 @@ class AttrDict(dict):
         """
         if config_type == "toml":
             if is_tomllib:
-                d = tomllib.loads(config_str)
+                d = tomllib.loads(config_str)  # type: ignore
             else:
-                d = toml.loads(config_str)
+                d = toml.loads(config_str)  # type: ignore
         elif config_type == "json":
             d = json.loads(config_str)
         elif config_type == "ini":
@@ -298,7 +298,7 @@ class AttrDict(dict):
                     "Error! YAML not installed. If you would like to use YAML with pi-conf, "
                     "install it with 'pip install pyyaml' or 'pip install pi-conf[yaml]"
                 )
-            d = yaml.safe_load(config_str)
+            d = yaml.safe_load(config_str)  # type: ignore
         else:
             raise Exception(f"Error! Unknown config_type '{config_type}'")
         return cls.from_dict(d, _nested_same_class=_nested_same_class)
@@ -376,7 +376,7 @@ class ProvenanceDict(AttrDict):
         return super().clear()
 
     @classmethod
-    def from_dict(cls: type["AttrDict"], d: dict, _nested_same_class: bool = False) -> "AttrDict":
+    def from_dict(cls: type[T], d: dict, _nested_same_class: bool = False) -> T:
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a dict
 
@@ -389,8 +389,8 @@ class ProvenanceDict(AttrDict):
         Returns:
             AttrDict: the AttrDict object, or subclass
         """
-        d = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
-        return d
+        ad = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
+        return ad
 
 
 class Config(ProvenanceDict):
@@ -405,9 +405,9 @@ def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
     if ext == ".toml":
         if is_tomllib:  ## python 3.11+ have toml in the core libraries
             with open(path, "rb") as fp:
-                return Config.from_dict(tomllib.load(fp))
+                return Config.from_dict(tomllib.load(fp))  # type: ignore
         else:  ## python <3.11 need the toml library
-            return Config.from_dict(toml.load(path))
+            return Config.from_dict(toml.load(path))  # type: ignore
     elif ext == ".json":
         with open(path, "r") as fp:
             return Config.from_dict(json.load(fp))
@@ -422,7 +422,7 @@ def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
                 "install it with 'pip install pyyaml' or 'pip install pi-conf[yaml]"
             )
         with open(path, "r") as fp:
-            return Config.from_dict(yaml.safe_load(fp))
+            return Config.from_dict(yaml.safe_load(fp))  # type: ignore
     raise Exception(f"Error! Unknown config file extension '{ext}'")
 
 

@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 PROVENANCE_DEPTH = 2
 
+
 class ProvenanceOp(str, Enum):
     set = "set"
     update = "update"
@@ -18,6 +19,7 @@ class ProvenanceOp(str, Enum):
 
     def __str__(self):
         return self.value
+
 
 class Provenance:
     """Provenance of the config"""
@@ -30,10 +32,14 @@ class Provenance:
             self.stack = _provenance_manager.get_methods_that_called_this_method(PROVENANCE_DEPTH)
 
     def __repr__(self):
-        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}' op='{self.operation}'>"
+        return (
+            f"<Provenance: abbr_stack='{self.stack}' source='{self.source}' op='{self.operation}'>"
+        )
 
     def __str__(self):
-        return f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'> op='{self.operation}'"
+        return (
+            f"<Provenance: abbr_stack='{self.stack}' source='{self.source}'> op='{self.operation}'"
+        )
 
 
 @dataclass
@@ -95,7 +101,7 @@ class ProvenanceManager:
             pass
 
     @staticmethod
-    def get_methods_that_called_this_method(depth: Optional[int] = None) -> str:
+    def get_methods_that_called_this_method(depth: Optional[int] = None) -> list[str]:
         """Get the method that called this method"""
         try:
             stack = []
@@ -115,7 +121,7 @@ class ProvenanceManager:
 
         except Exception as e:
             log.error(f"Error! {e}")
-            return "Unknown"
+            return ["Unknown"]
 
 
 @dataclass
@@ -148,9 +154,9 @@ class NullOpProvenanceManager(ProvenanceManager):
         """Delete the provenance of the given object"""
 
     @staticmethod
-    def get_methods_that_called_this_method(depth: Optional[int] = None) -> str:
+    def get_methods_that_called_this_method(depth: Optional[int] = None) -> list[str]:
         """Get the method that called this method"""
-        return "Unknown"
+        return ["Unknown"]
 
 
 _provenance_manager = ProvenanceManager()  ## provenance of the config
