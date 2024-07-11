@@ -8,7 +8,7 @@ description = "Easy configs for python projects"
 license = "MIT"
 name = "pi-conf"
 readme = "README.md"
-version = "0.7.8.2"
+version = "0.7.8.3"
 
 [tool.poetry.dependencies]
 python = "^3.9"

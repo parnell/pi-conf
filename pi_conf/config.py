@@ -42,6 +42,7 @@ T = TypeVar("T", bound="AttrDict")
 
 log = logging.getLogger(__name__)
 
+sentinel = object()
 _attr_dict_dont_overwrite = set([func for func in dir(dict) if getattr(dict, func)])
 
 
@@ -100,6 +101,38 @@ class AttrDict(dict):
 
         super().update(*args, **kwargs)
         AttrDict._from_dict(self, _depth=0, inline=True)
+
+    def get_nested(self, keys: str, default: Any = sentinel) -> Any:
+        """
+        Get a nested value from the dictionary. Only works with string keys
+        Args:
+            keys (str): The keys to get from the dictionary
+            default (Any): The default value if the key is not found
+        Returns:
+            Any: The value of the key
+        
+        Example:
+            d = AttrDict({"a":1, "b":{"c":3}})
+            d.get_nested('a') == 1
+            d.get_nested('b.c') == 3
+            d.get_nested('b.d', 'default') == 'default'
+            d.get_nested('x.y.z', None) == None
+            d.get_nested("notfound") # raises KeyError
+        """
+        current = self
+        for key in keys.split("."):
+            if isinstance(current, dict):
+                if key in current:
+                    current = current[key]
+                elif default is not sentinel:
+                    return default
+                else:
+                    raise KeyError(f"Key not found: '{key}'")
+            elif default is not sentinel:
+                return default
+            else:
+                raise KeyError(f"'{key}' is not a nested dictionary")
+        return current
 
     def to_env(
         self,
