@@ -60,7 +60,7 @@ class ProvenanceManager:
         """Get the provenance of the given object"""
         return self._provenance.get(id(obj), [])
 
-    def set(self, obj, provenance: list[Provenance]):
+    def set(self, obj, provenance: Provenance | list[Provenance]):
         """Set the provenance of the given object"""
         oid = id(obj)
         if oid not in self._enabled:
@@ -135,7 +135,7 @@ class NullOpProvenanceManager(ProvenanceManager):
         """Get the provenance of the given object"""
         return []
 
-    def set(self, obj, provenance: list[Provenance]):
+    def set(self, obj, provenance: Provenance | list[Provenance]):
         """Set the provenance of the given object"""
 
     def append(self, obj, provenance: Provenance):

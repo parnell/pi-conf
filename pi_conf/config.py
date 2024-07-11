@@ -4,13 +4,13 @@ import configparser
 import json
 import logging
 import os
-from typing import Any, Iterable, Literal, Optional, cast, TypeVar
+from typing import Any, Iterable, Literal, Optional, TypeVar, cast
 
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
 
 try:
-    import yaml
+    import yaml  # type: ignore
 
     has_yaml = True
 except:
@@ -21,7 +21,7 @@ try:  ## python 3.11+ have toml in the core libraries
 
     is_tomllib = True
 except:  ## python <3.11 need the toml library
-    import toml # type: ignore
+    import toml  # type: ignore
 
     is_tomllib = False
 try:
@@ -414,7 +414,8 @@ def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
     elif ext == ".ini":
         cfg_parser = configparser.ConfigParser()
         cfg_parser.read(path)
-        return Config.from_dict(cfg_parser)
+        cfg_dict = {section: dict(cfg_parser[section]) for section in cfg_parser.sections()}
+        return Config.from_dict(cfg_dict)
     elif ext == ".yaml":
         if not has_yaml:
             raise Exception(
@@ -467,7 +468,9 @@ def _find_config(
     return None
 
 
-def update_config(appname_path_dict: str | dict, config_directories: str | list[str]) -> Config:
+def update_config(
+    appname_path_dict: str | dict, config_directories: Optional[str | list[str]]
+) -> Config:
     """Update the global config with another config
 
     Args:
