@@ -19,8 +19,8 @@ a = 2
 
 ### Using inside of a single script
 ```python
-from pi_conf import set_config
-cfg = set_config("ourappname")
+from pi_conf import load_config
+cfg = load_config("ourappname")
 
 print(cfg.foo) # 1
 print(cfg.bar.a) # 2
@@ -28,14 +28,13 @@ print(cfg.bar.a) # 2
 
 
 ### Using inside of applications
-The following is the preferred way of using the p-config module. We set it once in our `__init__.py` then use it whichever files need it. Since `cfg` is a singleton setting it multiple times is unnecessary and will cause it to load from the file again.
+The following is the preferred way of using the pi-conf module. 
 
 ```python
 # __init__.py
 
-from pi_conf import set_config
-set_config("ourappname") ## Sets the config from the application <appname> directory
-from pi_conf import cfg as cfg ## Allows the cfg to be importable from our app
+from pi_conf import load_config
+cfg = load_config("ourappname") ## Loads the config from the application <appname> directory
 
 ```
 
@@ -50,7 +49,8 @@ print(cfg.foo) # 1
 
 * Option 2
 ```python
-from pi_conf import cfg ## Import the cfg from p-config
+from pi_conf import load_config ## Just load it again
+cfg = load_config("ourappname")
 
 print(cfg.foo) # 1
 ```
