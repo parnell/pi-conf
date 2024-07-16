@@ -102,15 +102,23 @@ class AttrDict(dict):
         super().update(*args, **kwargs)
         AttrDict._from_dict(self, _depth=0, inline=True)
 
-    def get_nested(self, keys: str, default: Any = sentinel) -> Any:
+    def get_nested(
+        self,
+        keys: str,
+        default: Any = sentinel,
+        list_item: Optional[int] = 0,
+        split_delimiter: str = ".",
+    ) -> Any:
         """
         Get a nested value from the dictionary. Only works with string keys
         Args:
             keys (str): The keys to get from the dictionary
             default (Any): The default value if the key is not found
+            list_item (int): If the key is a list, get the item at the index,
+                set to None to disable
         Returns:
             Any: The value of the key
-        
+
         Example:
             d = AttrDict({"a":1, "b":{"c":3}})
             d.get_nested('a') == 1
@@ -120,7 +128,7 @@ class AttrDict(dict):
             d.get_nested("notfound") # raises KeyError
         """
         current = self
-        for key in keys.split("."):
+        for key in keys.split(split_delimiter):
             if isinstance(current, dict):
                 if key in current:
                     current = current[key]
@@ -128,6 +136,20 @@ class AttrDict(dict):
                     return default
                 else:
                     raise KeyError(f"Key not found: '{key}'")
+            elif list_item is not None and isinstance(current, list):
+                if list_item < len(current):
+                    current = current[list_item]
+                    if isinstance(current, dict) and key in current:
+                        current = current[key]
+                    elif default is not sentinel:
+                        return default
+                    else:
+                        raise KeyError(f"Key not found: '{key}'")
+                else:
+                    if default is not sentinel:
+                        return default
+                    else:
+                        raise KeyError(f"'{key}', List index out of range: idx={list_item}, len={len(current)}")
             elif default is not sentinel:
                 return default
             else:
