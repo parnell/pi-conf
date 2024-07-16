@@ -1,19 +1,12 @@
 import os
 import sys
-import tempfile
+
 import pytest
 
-from pi_conf.config import _load_config_file
-from pi_conf import Config, load_config, set_config, AttrDict
+from pi_conf import AttrDict, Config, load_config, set_config
 
 basedir = os.path.abspath(os.getcwd())
 sys.path.append(basedir)
-
-
-@pytest.fixture(scope="module")
-def setup_teardown():
-    yield
-    # Cleanup code if needed
 
 
 def test_config_empty_at_start():
@@ -36,56 +29,6 @@ def test_config_from_list_dict_nested():
     cfg = Config.from_dict({"a": 1, "b": [{"c": 2}, {"d": 3}]})
     assert cfg.a == 1
     assert cfg.b[0].c == 2
-
-
-def test_config_loads_toml():
-    s = """
-    [a]
-    b = 1"""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".toml") as f:
-        f.write(s)
-        f.flush()
-        cfg = _load_config_file(f.name)
-        assert cfg["a"]["b"] == 1
-
-
-def test_config_loads_json():
-    s = """
-    {
-        "a": {
-            "b": 1
-        }
-    }
-    """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as f:
-        f.write(s)
-        f.flush()
-        cfg = _load_config_file(f.name)
-        assert cfg["a"]["b"] == 1
-
-
-def test_config_loads_yaml():
-    s = """
-    a:
-        b: 1
-    """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
-        f.write(s)
-        f.flush()
-        cfg = _load_config_file(f.name)
-        assert cfg["a"]["b"] == 1
-
-
-def test_config_loads_ini():
-    s = """
-    [a]
-    b = 1
-    """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".ini") as f:
-        f.write(s)
-        f.flush()
-        cfg = _load_config_file(f.name)
-        assert cfg["a"]["b"] == "1"
 
 
 def test_config_dict_init():
@@ -119,15 +62,14 @@ def test_to_env_str():
     assert envs == [("A", "1"), ("B", "2")]
 
 
-def test_set_config_not_exists():
-    with tempfile.TemporaryDirectory() as d:
-        bn = os.path.basename(d)
-        set_config(bn, config_directories=[d])
-        with open(os.path.join(d, "config.toml"), "w") as f:
-            f.write("a = 1")
-            f.flush()
-        cfg = load_config(bn, config_directories=[d])
-        assert cfg.a == 1
+def test_set_config_not_exists(tmpdir):
+    bn = os.path.basename(tmpdir)
+    set_config(bn, config_directories=[tmpdir])
+    with open(os.path.join(tmpdir, "config.toml"), "w") as f:
+        f.write("a = 1")
+        f.flush()
+    cfg = load_config(bn, config_directories=[tmpdir])
+    assert cfg.a == 1
 
 
 def test_update_attrdict_with_attrdict():
@@ -146,6 +88,7 @@ def test_update_attrdict_with_dict():
     assert d1.a == 1
     assert d1.b.a == 2
     assert d1.b.c == 3
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

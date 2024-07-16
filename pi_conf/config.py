@@ -149,7 +149,9 @@ class AttrDict(dict):
                     if default is not sentinel:
                         return default
                     else:
-                        raise KeyError(f"'{key}', List index out of range: idx={list_item}, len={len(current)}")
+                        raise KeyError(
+                            f"'{key}', List index out of range: idx={list_item}, len={len(current)}"
+                        )
             elif default is not sentinel:
                 return default
             else:
@@ -295,7 +297,11 @@ class AttrDict(dict):
         return d
 
     @classmethod
-    def from_dict(cls: type["AttrDict"], d: dict, _nested_same_class: bool = False) -> "AttrDict":
+    def from_dict(
+        cls: type["AttrDict"],
+        d: dict,
+        _nested_same_class: bool = False,
+    ) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
 
@@ -499,28 +505,100 @@ def _find_config(
     Returns:
         str: the path to the config file
     """
-    if config_directories is None:
+    _, ext = os.path.splitext(config_file_or_appname)
+    is_file = bool(ext)
+
+    default_file_name = "config" if not is_file else config_file_or_appname
+    file_name_str = f"{default_file_name}.<ext>" if not is_file else config_file_or_appname
+
+    if config_directories is None:    
         check_order = [
             config_file_or_appname,
-            f"~/.config/{config_file_or_appname}/config.<ext>",
-            f"{site_config_dir(appname=config_file_or_appname)}/config.<ext>",
+            f"~/.config/{config_file_or_appname}/{file_name_str}",
+            f"{site_config_dir(appname=config_file_or_appname)}/{file_name_str}",
         ]
     elif isinstance(config_directories, str):
         config_directories = os.path.expanduser(config_directories)
         check_order = [
-            f"{config_directories}/config.<ext>",
+            f"{config_directories}/{file_name_str}",
         ]
     else:
-        check_order = [f"{os.path.expanduser(d)}/config.<ext>" for d in config_directories]
+        check_order = [
+            f"{os.path.expanduser(d)}/{file_name_str}" for d in config_directories
+        ]
     for potential_config in check_order:
-        for extension in ["toml", "json", "ini", "yaml"]:
-            potential_config = potential_config.replace("<ext>", extension)
-            potential_config = os.path.expanduser(potential_config)
-            if os.path.isfile(potential_config):
+        if is_file:
+            if os.path.exists(potential_config):
                 log.debug(f"Found config: '{potential_config}'")
                 return potential_config
+        else:
+            for extension in ["toml", "json", "ini", "yaml"]:
+                potential_config = potential_config.replace("<ext>", extension)
+                potential_config = os.path.expanduser(potential_config)
+                if os.path.isfile(potential_config):
+                    log.debug(f"Found config: '{potential_config}'")
+                    return potential_config
     log.debug(f"No config file found.")
     return None
+
+
+# def _find_config(
+#     config_file_or_appname: str, config_directories: Optional[str | list] = None
+# ) -> Optional[str]:
+#     """Find the config file from the config directory
+#         This will read the first config found in the following directories.
+#         If multiple config files are found, the first one will be used,
+#         in this order toml|json|ini|yaml
+#             - specified config file (if it has an extension)
+#             - ~/.config/<appname>/config.(toml|json|ini|yaml)
+#             - <system config directory>/<appname>/config.(toml|json|ini|yaml)
+
+#     Args:
+#         config_file_or_appname (str): Config file name or app name for choosing the config directory
+#         config_directories (Optional[str | list]): Optional custom config directories
+
+#     Returns:
+#         str: the path to the config file
+#     """
+#     # Check if config_file_or_appname is a file (has an extension)
+#     _, ext = os.path.splitext(config_file_or_appname)
+#     is_file = bool(ext)
+
+#     if config_directories is None:
+#         if is_file:
+#             check_order = [config_file_or_appname]
+#         else:
+#             check_order = [
+#                 f"~/.config/{config_file_or_appname}/config.<ext>",
+#                 f"{site_config_dir(appname=config_file_or_appname)}/config.<ext>",
+#             ]
+#     elif isinstance(config_directories, str):
+#         config_directories = os.path.expanduser(config_directories)
+#         check_order = [
+#             f"{config_directories}/{'config' if not is_file else config_file_or_appname}.<ext>",
+#         ]
+#     else:
+#         check_order = [
+#             f"{os.path.expanduser(d)}/{'config' if not is_file else config_file_or_appname}.<ext>"
+#             for d in config_directories
+#         ]
+
+#     for potential_config in check_order:
+#         # If the potential_config is a full path, don't add extensions
+#         if os.path.splitext(potential_config)[1]:
+#             if os.path.isfile(os.path.expanduser(potential_config)):
+#                 log.debug(f"Found config: '{potential_config}'")
+#                 return os.path.expanduser(potential_config)
+#         else:
+#             for extension in ["toml", "json", "ini", "yaml"]:
+#                 config_path = potential_config.replace("<ext>", extension)
+#                 config_path = os.path.expanduser(config_path)
+#                 if os.path.isfile(config_path):
+#                     log.debug(f"Found config: '{config_path}'")
+#                     return config_path
+
+#     log.debug(f"No config file found.")
+#     return None
 
 
 def update_config(
