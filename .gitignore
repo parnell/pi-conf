@@ -38,6 +38,7 @@ cachedir
 ## temp files
 *.bk.*
 * copy.py*
+.private
 ## VSCode
 *.vscode
 
