@@ -64,7 +64,7 @@ def test_load_non_default(tmpdir):
     """
     with open(os.path.join(tmpdir, "alt_config.toml"), "w") as f:
         f.write(s)
-    cfg = load_config("alt_config.toml", config_directories=[tmpdir])
+    cfg = load_config("alt_config.toml", directories=[tmpdir])
 
     assert cfg["a"]["b"] == 1
 
@@ -80,7 +80,7 @@ def test_load_non_default_nested(tmpdir):
     file_loc = os.path.join(tmpdir, os.path.join(nested_dir, file_name))
     with open(file_loc, "w") as f:
         f.write(s)
-    cfg = load_config(file_name, config_directories=[nested_dir])
+    cfg = load_config(file_name, directories=[nested_dir])
 
     assert cfg["a"]["b"] == 1
 
@@ -96,7 +96,7 @@ def test_load_non_default_nested_filename(tmpdir):
     file_loc = os.path.join(tmpdir, os.path.join(nested_dir, file_name))
     with open(file_loc, "w") as f:
         f.write(s)
-    cfg = load_config(f"nested/{file_name}", config_directories=[tmpdir])
+    cfg = load_config(f"nested/{file_name}", directories=[tmpdir])
 
     assert cfg["a"]["b"] == 1
 

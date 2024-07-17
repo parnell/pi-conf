@@ -64,11 +64,11 @@ def test_to_env_str():
 
 def test_set_config_not_exists(tmpdir):
     bn = os.path.basename(tmpdir)
-    set_config(bn, config_directories=[tmpdir])
+    set_config(bn, directories=[tmpdir])
     with open(os.path.join(tmpdir, "config.toml"), "w") as f:
         f.write("a = 1")
         f.flush()
-    cfg = load_config(bn, config_directories=[tmpdir])
+    cfg = load_config(bn, directories=[tmpdir])
     assert cfg.a == 1
 
 
