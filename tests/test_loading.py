@@ -57,7 +57,7 @@ def test_config_loads_ini():
         assert cfg["a"]["b"] == "1"
 
 
-def test_load_non_default(tmpdir):
+def test_load_from_directory(tmpdir):
     s = """
     [a]
     b = 1

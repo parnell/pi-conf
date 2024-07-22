@@ -43,7 +43,10 @@ class MySettings(ConfigSettings):
 
 
 def config(toml_file_path: str):
-    return MySettings.model_construct(model_config=TomlSettingsConfigDict(appname=toml_file_path))
+    return MySettings.model_construct(
+        model_config=TomlSettingsConfigDict(appname=toml_file_path),
+    )
+    # return MySettings(model_config={"appname":toml_file_path})
 
 
 def write_toml(data: dict[str, Any], path: str, name: str = "config.toml"):

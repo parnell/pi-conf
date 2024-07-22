@@ -1,6 +1,7 @@
 """ Custom BaseSettings class for loading in complex types from toml files 
 using the Config class."""
 
+import json
 import tempfile
 from typing import Any, Dict, List, Self, Type, get_args, get_origin
 
@@ -16,11 +17,11 @@ class TomlSettingsConfigDict(SettingsConfigDict, total=False):
 
     Attributes:
         appname (str): The name of the application.
-        toml_table_header (str): Header for the TOML table.
+        table_header (str): Header for the TOML table.
     """
 
     appname: str
-    toml_table_header: str
+    table_header: str
 
 
 class ConfigSettings(BaseSettings):
@@ -30,7 +31,7 @@ class ConfigSettings(BaseSettings):
         model_config (TomlSettingsConfigDict): Configuration for the model.
     """
 
-    model_config = TomlSettingsConfigDict(toml_table_header="")
+    model_config = TomlSettingsConfigDict(table_header="")
 
     def __init__(self, *args, **kwargs):
         """Initialize the ConfigSettings object.
@@ -43,9 +44,7 @@ class ConfigSettings(BaseSettings):
             ValueError: If neither 'toml_file' nor 'appname' is provided.
         """
         model_config = kwargs.pop("model_config", self.model_config)
-        toml_table_header = kwargs.pop(
-            "toml_table_header", model_config.get("toml_table_header", "")
-        )
+        table_header = kwargs.pop("table_header", model_config.get("table_header", ""))
         locs = ["toml_file", "appname"]
         for loc in locs:
             v = kwargs.pop(loc, model_config.get(loc))
@@ -55,8 +54,8 @@ class ConfigSettings(BaseSettings):
         else:
             raise ValueError(f"one of {locs} must be provided")
 
-        if toml_table_header:
-            cfg = cfg.get_nested(toml_table_header)
+        if table_header:
+            cfg = cfg.get_nested(table_header)
 
         temp_toml_file = self.create_temp_toml_file(cfg)
         try:
@@ -149,3 +148,6 @@ class ConfigSettings(BaseSettings):
         except ValidationError as e:
             print(f"Error parsing {model_class.__name__}: {e}")
             raise e
+
+    def _pformat(self, indent: int = 4) -> str:
+        return json.dumps(self.model_dump(mode="json"), indent=indent)
