@@ -4,7 +4,7 @@ import pytest
 import toml
 from pydantic import BaseModel
 
-from pi_conf.config_settings import ConfigSettings, TomlSettingsConfigDict
+from pi_conf.config_settings import ConfigSettings, ConfigDict
 
 
 @pytest.fixture
@@ -39,12 +39,12 @@ class MySettings(ConfigSettings):
     pymodel_value: Optional[ModelValue] = None
     pymodel_list: Optional[List[ModelValue]] = None
 
-    model_config = TomlSettingsConfigDict(toml_file="")
+    model_config = ConfigDict(toml_file="")
 
 
 def config(toml_file_path: str):
     return MySettings.model_construct(
-        model_config=TomlSettingsConfigDict(appname=toml_file_path),
+        model_config=ConfigDict(appname=toml_file_path),
     )
     # return MySettings(model_config={"appname":toml_file_path})
 

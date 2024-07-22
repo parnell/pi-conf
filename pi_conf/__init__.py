@@ -17,8 +17,8 @@ __all__ = [
 ]
 
 try: ## Optional pydantic settings support
-    from pi_conf.config_settings import ConfigSettings, TomlSettingsConfigDict
+    from pi_conf.config_settings import ConfigSettings, ConfigDict
 
-    __all__.extend(["ConfigSettings", "TomlSettingsConfigDict"])
+    __all__.extend(["ConfigSettings", "ConfigDict"])
 except ImportError:
     pass

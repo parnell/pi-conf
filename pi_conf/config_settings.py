@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pi_conf import Config, load_config
 
 
-class TomlSettingsConfigDict(SettingsConfigDict, total=False):
+class ConfigDict(SettingsConfigDict, total=False):
     """Extended SettingsConfigDict for TOML-specific settings.
 
     Attributes:
@@ -28,10 +28,10 @@ class ConfigSettings(BaseSettings):
     """Main class for handling configuration settings.
 
     Attributes:
-        model_config (TomlSettingsConfigDict): Configuration for the model.
+        model_config (ConfigDict): Configuration for the model.
     """
 
-    model_config = TomlSettingsConfigDict(table_header="")
+    model_config = ConfigDict(table_header="")
 
     def __init__(self, *args, **kwargs):
         """Initialize the ConfigSettings object.
