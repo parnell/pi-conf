@@ -42,7 +42,7 @@ class MySettings(ConfigSettings):
     model_config = ConfigDict(toml_file="")
 
 
-def config(toml_file_path: str):
+def config_settings(toml_file_path: str) -> MySettings:
     return MySettings.model_construct(
         model_config=ConfigDict(appname=toml_file_path),
     )
@@ -58,15 +58,15 @@ def write_toml(data: dict[str, Any], path: str, name: str = "config.toml"):
 def test_config_settings(tmp_path, test_data):
     config_file = tmp_path / "config.toml"
     write_toml(test_data, tmp_path)
-    config_settings = config(str(config_file))
-    assert config_settings.string_value == test_data["string_value"]
-    assert config_settings.int_value == test_data["int_value"]
-    assert config_settings.list_value == test_data["list_value"]
-    assert config_settings.dict_value == test_data["dict_value"]
-    assert config_settings.pymodel_value
-    assert config_settings.pymodel_value.model_dump() == test_data["pymodel_value"]
-    assert config_settings.pymodel_list
-    assert [model.model_dump() for model in config_settings.pymodel_list] == test_data[
+    settings = config_settings(str(config_file))
+    assert settings.string_value == test_data["string_value"]
+    assert settings.int_value == test_data["int_value"]
+    assert settings.list_value == test_data["list_value"]
+    assert settings.dict_value == test_data["dict_value"]
+    assert settings.pymodel_value
+    assert settings.pymodel_value.model_dump() == test_data["pymodel_value"]
+    assert settings.pymodel_list
+    assert [model.model_dump() for model in settings.pymodel_list] == test_data[
         "pymodel_list"
     ]
 

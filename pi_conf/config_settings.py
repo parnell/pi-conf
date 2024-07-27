@@ -10,6 +10,10 @@ from pydantic import BaseModel, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pi_conf import Config, load_config
+from pi_conf.config import load_from_appname
+
+
+sentinel = object()
 
 
 class ConfigDict(SettingsConfigDict, total=False):
@@ -17,11 +21,11 @@ class ConfigDict(SettingsConfigDict, total=False):
 
     Attributes:
         appname (str): The name of the application.
-        table_header (str): Header for the TOML table.
+        toml_table_header (str): Header for the TOML table.
     """
 
     appname: str
-    table_header: str
+    toml_table_header: str
 
 
 class ConfigSettings(BaseSettings):
@@ -31,7 +35,7 @@ class ConfigSettings(BaseSettings):
         model_config (ConfigDict): Configuration for the model.
     """
 
-    model_config = ConfigDict(table_header="")
+    model_config = ConfigDict(toml_table_header="")
 
     def __init__(self, *args, **kwargs):
         """Initialize the ConfigSettings object.
@@ -44,18 +48,38 @@ class ConfigSettings(BaseSettings):
             ValueError: If neither 'toml_file' nor 'appname' is provided.
         """
         model_config = kwargs.pop("model_config", self.model_config)
-        table_header = kwargs.pop("table_header", model_config.get("table_header", ""))
-        locs = ["toml_file", "appname"]
-        for loc in locs:
-            v = kwargs.pop(loc, model_config.get(loc))
-            if v:
-                cfg = load_config(v)
-                break
-        else:
-            raise ValueError(f"one of {locs} must be provided")
 
-        if table_header:
-            cfg = cfg.get_nested(table_header)
+        specified_vars = ["toml_file", "appname", "toml_table_header"]
+        for var in specified_vars:
+            val = kwargs.pop(var, sentinel)
+            if val is not sentinel:
+                model_config[var] = val
+
+        cfg = None
+        appname = model_config.get("appname")
+        toml_file = model_config.get("toml_file")
+        if toml_file and appname:
+            ## we want to search for the toml file in the appname directory
+            cfg = load_from_appname(appname=appname, file=toml_file)
+        if not cfg:
+            locs = ["toml_file", "appname"]
+            for loc in locs:
+                v = model_config.get(loc)
+                if v:
+                    cfg = load_config(v)
+                    break
+            else:
+                raise ValueError(f"one of {locs} must be provided")
+
+        toml_table_header = model_config.get("toml_table_header", "")
+        if toml_table_header:
+            try:
+                cfg = cfg.get_nested(toml_table_header)
+            except KeyError:
+                raise KeyError(
+                    f"toml_table_header '{toml_table_header}' not "
+                    f"found in config {cfg.provenance[-1].source}"
+                )
 
         temp_toml_file = self.create_temp_toml_file(cfg)
         try:
