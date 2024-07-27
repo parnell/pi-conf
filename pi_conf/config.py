@@ -147,56 +147,91 @@ def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
     raise Exception(f"Error! Unknown config file extension '{ext}'")
 
 
-def _find_config(
-    config_file_or_appname: str, directories: Optional[str | list] = None
-) -> Optional[str]:
-    """Find the config file from the config directory
-        This will be read the first config found in following directories.
-        If multiple config files are found, the first one will be used,
-        in this order toml|json|ini|yaml
-            - specified config file
-            - ~/.config/<appname>/config.(toml|json|ini|yaml)
-            - <system config directory>/<appname>/config.(toml|json|ini|yaml)
-
-    Args:
-        config_file_or_appname (str): App name for choosing the config directory
-        directories (Optional[str | list]): Optional list of directories to search
-
-    Returns:
-        str: the path to the config file
-    """
-    _, ext = os.path.splitext(config_file_or_appname)
-    is_file = bool(ext)
-
-    default_file_name = "config" if not is_file else config_file_or_appname
-    file_name_str = f"{default_file_name}.<ext>" if not is_file else config_file_or_appname
-
-    if directories is None:
-        check_order = [
-            config_file_or_appname,
-            f"~/.config/{config_file_or_appname}/{file_name_str}",
-            f"{site_config_dir(appname=config_file_or_appname)}/{file_name_str}",
-        ]
-    elif isinstance(directories, str):
-        directories = os.path.expanduser(directories)
-        check_order = [
-            f"{directories}/{file_name_str}",
+def _get_default_search_paths(filename: str, appname: Optional[str] = None) -> list[str]:
+    """Get the default search paths for a config file."""
+    if appname:
+        return [
+            os.path.expanduser(f"~/.config/{appname}/{filename}"),
+            os.path.join(site_config_dir(appname=appname), filename),
         ]
     else:
-        check_order = [f"{os.path.expanduser(d)}/{file_name_str}" for d in directories]
-    for potential_config in check_order:
-        if is_file:
-            if os.path.exists(potential_config):
-                log.debug(f"Found config: '{potential_config}'")
-                return potential_config
-        else:
-            for extension in ["toml", "json", "ini", "yaml"]:
-                potential_config = potential_config.replace("<ext>", extension)
-                potential_config = os.path.expanduser(potential_config)
-                if os.path.isfile(potential_config):
-                    log.debug(f"Found config: '{potential_config}'")
-                    return potential_config
-    log.debug(f"No config file found.")
+        return [
+            filename,
+            os.path.expanduser(f"~/.config/{filename}"),
+            os.path.join(site_config_dir(), filename),
+        ]
+
+
+def _get_search_paths(
+    filename: str, directories: Optional[str | list[str]], appname: Optional[str] = None
+) -> list[str]:
+    """Get the search paths based on provided directories or default locations."""
+    if directories is None:
+        return _get_default_search_paths(filename, appname)
+    elif isinstance(directories, str):
+        return [os.path.join(os.path.expanduser(directories), filename)]
+    else:
+        return [os.path.join(os.path.expanduser(d), filename) for d in directories]
+
+
+def _find_file_with_extensions(path: str, extensions: list[str]) -> Optional[str]:
+    """Find a file with given extensions."""
+    if os.path.exists(path):
+        return path
+    for ext in extensions:
+        full_path = path.replace("<ext>", ext)
+        full_path = os.path.expanduser(full_path)
+        if os.path.isfile(full_path):
+            log.debug(f"Found config: '{full_path}'")
+            return full_path
+    return None
+
+
+def _find_config(
+    config_file_or_appname: str, directories: Optional[str | list[str]] = None
+) -> Optional[str]:
+    """Find the config file from the config directory or direct path."""
+    # First, check if it's a direct file path
+    if os.path.isfile(config_file_or_appname):
+        return config_file_or_appname
+
+    # If not a direct file path, check if it looks like a filename (has an extension)
+    _, ext = os.path.splitext(config_file_or_appname)
+    if ext:
+        # It looks like a filename
+        search_paths = _get_search_paths(config_file_or_appname, directories=directories)
+    else:
+        # It looks like an appname
+        search_paths = _get_search_paths(
+            "config.<ext>", directories=directories, appname=config_file_or_appname
+        )
+
+    extensions = ["toml", "json", "ini", "yaml"] if not ext else [""]
+    for path in search_paths:
+        found_path = _find_file_with_extensions(path, extensions)
+        if found_path:
+            log.debug(f"Found config: '{found_path}'")
+            return found_path
+
+    return None
+
+
+def _find_config_from_appname(
+    appname: str, file: Optional[str] = None, directories: Optional[str | list[str]] = None
+) -> Optional[str]:
+    """
+    Find a config file based on the appname and optionally a specific file name.
+    """
+    filename = file or "config.<ext>"
+    search_paths = _get_search_paths(filename, directories=directories, appname=appname)
+    extensions = ["toml", "json", "ini", "yaml"] if not file else [""]
+
+    for path in search_paths:
+        found_path = _find_file_with_extensions(path, extensions)
+        if found_path:
+            log.debug(f"Found config: '{found_path}'")
+            return found_path
+
     return None
 
 
@@ -272,16 +307,6 @@ def load_from_dict(d: dict) -> Config:
     return Config.from_dict(d)
 
 
-def load_from_appname(appname: str, directories: Optional[str | list] = None) -> Config:
-    """Load a config from an appname"""
-    path = _find_config(appname, directories=directories)
-    if path is None:
-        log.warning(f"No config file found for appname '{appname}'")
-        log.warning(f"You can create a config file at '{site_config_dir(appname=appname)}'")
-        raise FileNotFoundError(f"No config file found for '{appname}'")
-    return load_from_path(path)
-
-
 def load_from_path(path: str, directories: Optional[str | list] = None) -> Config:
     """Load a config from a file path"""
     full_path = _find_config(path, directories=directories)
@@ -292,8 +317,37 @@ def load_from_path(path: str, directories: Optional[str | list] = None) -> Confi
     return newcfg
 
 
+def load_from_appname(
+    appname: str, file: Optional[str] = None, directories: Optional[str | list[str]] = None
+) -> Config:
+    """
+    Load a config from an appname, optionally specifying a file name.
+
+    Args:
+        appname (str): The name of the application
+        file (Optional[str]): Specific file to search for. If None, defaults to 'config.<ext>'
+        directories (Optional[str | list[str]]): Optional list of directories to search
+
+    Returns:
+        Config: A config object (an attribute dictionary)
+
+    Raises:
+        FileNotFoundError: If no config file is found
+    """
+    config_path = _find_config_from_appname(appname, file, directories)
+
+    if config_path is None:
+        filestr = f" with file '{file}'" if file else ""
+        log.warning(f"No config file found for appname '{appname}' {filestr}")
+        log.warning(f"You can create a config file at '{site_config_dir(appname=appname)}' {filestr}")
+        raise FileNotFoundError(f"No config file found for '{appname}' {filestr}")
+
+    return load_from_path(config_path)
+
+
 def load_config(
     appname_path_dict: Optional[str | dict] = None,
+    file: Optional[str] = None,
     directories: Optional[str | list] = None,
     ignore_warnings: bool = False,
 ) -> Config:
@@ -305,6 +359,7 @@ def load_config(
             Dict: updates cfg with the given dict
             str: a path to a (.toml|.json|.ini|.yaml) file
             str: appname to search for the config.toml in the application config dir
+        file (Optional[str]): Specific file to search for when appname is provided
         directories (Optional[str | list]): Optional list of directories to search
         ignore_warnings (bool): If True, suppress warnings and return an empty Config for missing files
 
@@ -322,7 +377,7 @@ def load_config(
     except FileNotFoundError:
         # If it's not found as a direct path, try as an appname
         try:
-            return load_from_appname(appname_path_dict, directories)
+            return load_from_appname(appname_path_dict, file, directories)
         except FileNotFoundError:
             if ignore_warnings:
                 return Config.from_dict({})
