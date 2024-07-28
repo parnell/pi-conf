@@ -47,9 +47,15 @@ class ConfigSettings(BaseSettings):
         Raises:
             ValueError: If neither 'toml_file' nor 'appname' is provided.
         """
+        specified_vars = ["toml_file", "appname", "toml_table_header"]
+        if kwargs and not any(var in kwargs for var in specified_vars+["model_config"]):
+            return super().__init__(*args, **kwargs)
+
+
+
+        
         model_config = kwargs.pop("model_config", self.model_config)
 
-        specified_vars = ["toml_file", "appname", "toml_table_header"]
         for var in specified_vars:
             val = kwargs.pop(var, sentinel)
             if val is not sentinel:
