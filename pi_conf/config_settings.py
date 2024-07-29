@@ -48,12 +48,9 @@ class ConfigSettings(BaseSettings):
             ValueError: If neither 'toml_file' nor 'appname' is provided.
         """
         specified_vars = ["toml_file", "appname", "toml_table_header"]
-        if kwargs and not any(var in kwargs for var in specified_vars+["model_config"]):
+        if kwargs and not any(var in kwargs for var in specified_vars + ["model_config"]):
             return super().__init__(*args, **kwargs)
 
-
-
-        
         model_config = kwargs.pop("model_config", self.model_config)
 
         for var in specified_vars:
