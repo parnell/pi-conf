@@ -2,11 +2,10 @@ import configparser
 import json
 import logging
 import os
-from typing import Any, Iterable, Literal, Optional, TypeVar, cast
+from dataclasses import fields, is_dataclass
+from typing import Any, Dict, Iterable, Optional, Type, TypeVar, cast
 
 from pi_conf.module_check import has_yaml, is_tomllib
-from pi_conf.provenance import Provenance, ProvenanceOp
-from pi_conf.provenance import get_provenance_manager as get_pmanager
 
 if has_yaml:
     import yaml
@@ -14,20 +13,6 @@ if is_tomllib:
     import tomllib
 else:
     import toml
-
-
-try:
-    from platformdirs import site_config_dir
-except:
-
-    def site_config_dir(
-        appname: str | None = None,
-        appauthor: str | None | Literal[False] = None,
-        version: str | None = None,
-        multipath: bool = False,  # noqa: FBT001, FBT002
-        ensure_exists: bool = False,  # noqa: FBT001, FBT002
-    ) -> str:
-        return f"~/.config/{appname}"
 
 
 T = TypeVar("T", bound="AttrDict")
@@ -78,11 +63,49 @@ class AttrDict(dict):
             else:
                 self[m] = getattr(self, m)
 
+    @classmethod
+    def _from_dict(cls: Type[T] | Any, d: Dict[str, Any], depth: int = 0) -> T:
+
+        if depth == 0 and is_dataclass(cls):
+            # Handle dataclass fields
+            field_dict = {}
+            for field in fields(cls):
+                if field.name in d:
+                    if isinstance(field.type, type) and issubclass(field.type, AttrDict):
+                        # Recursively convert nested dictionaries for AttrDict fields
+                        field_dict[field.name] = field.type.from_dict(d[field.name])
+                    else:
+                        field_dict[field.name] = d[field.name]
+            return cast(T, cls(**field_dict))
+
+        if depth == 0:
+            result = cast(T, cls())
+        else:
+            result = cast(T, AttrDict())
+
+        for k, v in d.items():
+            if k in _attr_dict_dont_overwrite:
+                raise ValueError(f"Error! config key={k} would overwrite a default dict attr/func")
+            result[k] = cls._convert_value(v, depth=depth + 1)
+
+        return result
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, self._convert_value(value, depth=1))
+
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the dictionary.
         This will allow you to access the dictionary keys as attributes.
         Returning Any removes MyPy errors."""
         return super().__getattribute__(name)
+
+    @classmethod
+    def _convert_value(cls, value, depth: int):
+        if isinstance(value, dict) and not isinstance(value, cls):
+            return cls._from_dict(value, depth)
+        elif isinstance(value, list):
+            return [cls._convert_value(v, depth) for v in value]
+        return value
 
     def update(self, *args, **kwargs):
         """Update the config with another dict"""
@@ -91,8 +114,8 @@ class AttrDict(dict):
             super().update(*args, **kwargs)
             return
 
-        super().update(*args, **kwargs)
-        AttrDict._from_dict(self, _depth=0, inline=True)
+        for k, v in dict(*args, **kwargs).items():
+            self[k] = v  # This will call __setitem__, which converts the value
 
     def get_nested(
         self,
@@ -237,62 +260,9 @@ class AttrDict(dict):
         return added_envs
 
     @classmethod
-    def _from_dict(
-        cls: type[T],
-        d: dict,
-        _nested_same_class: bool = False,
-        _depth: int = 0,
-        inline: bool = False,
-    ) -> T:
-        """Make an AttrDict object without any keys
-        that will overwrite the normal functions of a dict
-
-        Args:
-            cls (AttrDict): Create a new AttrDict object (or subclass)
-            d (dict): The dictionary to convert to an AttrDict
-            _nested_same_class (bool): If True, nested dicts will be the subclass,
-                else they will be AttrDict
-
-        Returns:
-            AttrDict: the AttrDict object, or subclass
-        """
-        if not (_nested_same_class or _depth == 0):
-            cls = AttrDict
-
-        def _from_list_or_tuple(l):
-            ### TODO change to generic iterable
-            new_l = []
-            for pot_dict in l:
-                if isinstance(pot_dict, dict):
-                    new_l.append(
-                        cls._from_dict(
-                            pot_dict, _nested_same_class=_nested_same_class, _depth=_depth + 1
-                        )
-                    )
-                elif isinstance(pot_dict, list) or isinstance(pot_dict, tuple):
-                    new_l.append(_from_list_or_tuple(pot_dict))
-                else:
-                    new_l.append(pot_dict)
-            return new_l
-
-        if not inline:
-            d = cls(**d)
-        for k, v in d.items():
-            if k in _attr_dict_dont_overwrite:
-                raise Exception(f"Error! config key={k} would overwrite a default dict attr/func")
-            if isinstance(v, dict):
-                d[k] = cls._from_dict(v, _nested_same_class=_nested_same_class, _depth=_depth + 1)
-            elif isinstance(v, list) or isinstance(v, tuple):
-                d[k] = _from_list_or_tuple(v)
-            else:
-                d[k] = v
-        return d
-
-    @classmethod
     def from_dict(
         cls: type["AttrDict"],
         d: dict,
-        _nested_same_class: bool = False,
     ) -> "AttrDict":
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a
@@ -300,20 +270,17 @@ class AttrDict(dict):
         Args:
             cls (AttrDict): Create a new AttrDict object (or subclass)
             d (dict): The dictionary to convert to an AttrDict
-            _nested_same_class (bool): If True, nested dicts will be the subclass,
-                else they will be AttrDict
 
         Returns:
             AttrDict: the AttrDict object, or subclass
         """
-        return cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
+        return cls._from_dict(d, depth=0)
 
     @classmethod
     def from_str(
         cls: type["AttrDict"],
         config_str: str,
         config_type: str = "toml",
-        _nested_same_class: bool = False,
     ) -> "AttrDict":
         """Make an AttrDict object from a string
 
@@ -321,8 +288,6 @@ class AttrDict(dict):
             cls (AttrDict): Create a new AttrDict object (or subclass)
             config_str (str): The string to convert to an AttrDict
             config_type (str): The type of string to convert from (toml|json|ini|yaml)
-            _nested_same_class (bool): If True, nested dicts will be the subclass,
-                else they will be AttrDict
 
         Raises:
             Exception: _description_
@@ -354,4 +319,4 @@ class AttrDict(dict):
             d = yaml.safe_load(config_str)  # type: ignore
         else:
             raise Exception(f"Error! Unknown config_type '{config_type}'")
-        return cls.from_dict(d, _nested_same_class=_nested_same_class)
+        return cls.from_dict(d)

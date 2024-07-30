@@ -4,12 +4,13 @@ import configparser
 import json
 import logging
 import os
-from typing import Optional, TypeVar
+from typing import Literal, Optional, TypeVar
 
-from pi_conf.attr_dict import AttrDict, has_yaml, is_tomllib, site_config_dir
+from pi_conf.attr_dict import AttrDict, has_yaml, is_tomllib
 from pi_conf.module_check import has_yaml, is_tomllib
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
+from pi_conf.open_func import open_func as open
 
 if has_yaml:
     import yaml
@@ -17,6 +18,21 @@ if is_tomllib:
     import tomllib
 else:
     import toml
+
+
+try:
+    from platformdirs import site_config_dir
+except:
+
+    def site_config_dir(
+        appname: str | None = None,
+        appauthor: str | None | Literal[False] = None,
+        version: str | None = None,
+        multipath: bool = False,  # noqa: FBT001, FBT002
+        ensure_exists: bool = False,  # noqa: FBT001, FBT002
+    ) -> str:
+        return f"~/.config/{appname}"
+
 
 T = TypeVar("T", bound="AttrDict")
 
@@ -96,20 +112,18 @@ class ProvenanceDict(AttrDict):
         return super().clear()
 
     @classmethod
-    def from_dict(cls: type[T], d: dict, _nested_same_class: bool = False) -> T:
+    def from_dict(cls: type[T], d: dict) -> T:
         """Make an AttrDict object without any keys
         that will overwrite the normal functions of a dict
 
         Args:
             cls (Type[AttrDict]): Create a new AttrDict object (or subclass)
             d (dict): The dictionary to convert to an AttrDict
-            _nested_same_class (bool): If True, nested dicts will be the subclass,
-                else they will be AttrDict
 
         Returns:
             AttrDict: the AttrDict object, or subclass
         """
-        ad = cls._from_dict(d, _nested_same_class=_nested_same_class, _depth=0)
+        ad: T = cls._from_dict(d, depth=0)
         return ad
 
 
@@ -123,17 +137,19 @@ def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
         __, ext = os.path.splitext(path)
 
     if ext == ".toml":
-        if is_tomllib:  ## python 3.11+ have toml in the core libraries
+        if is_tomllib:  # python 3.11+ have toml in the core libraries
             with open(path, "rb") as fp:
                 return Config.from_dict(tomllib.load(fp))  # type: ignore
-        else:  ## python <3.11 need the toml library
-            return Config.from_dict(toml.load(path))  # type: ignore
+        else:  # python <3.11 need the toml library
+            with open(path, "r") as fp:
+                return Config.from_dict(toml.loads(fp.read()))  # type: ignore
     elif ext == ".json":
         with open(path, "r") as fp:
             return Config.from_dict(json.load(fp))
     elif ext == ".ini":
         cfg_parser = configparser.ConfigParser()
-        cfg_parser.read(path)
+        with open(path, "r") as fp:
+            cfg_parser.read_file(fp)
         cfg_dict = {section: dict(cfg_parser[section]) for section in cfg_parser.sections()}
         return Config.from_dict(cfg_dict)
     elif ext == ".yaml":
@@ -339,7 +355,9 @@ def load_from_appname(
     if config_path is None:
         filestr = f" with file '{file}'" if file else ""
         log.warning(f"No config file found for appname '{appname}' {filestr}")
-        log.warning(f"You can create a config file at '{site_config_dir(appname=appname)}' {filestr}")
+        log.warning(
+            f"You can create a config file at '{site_config_dir(appname=appname)}' {filestr}"
+        )
         raise FileNotFoundError(f"No config file found for '{appname}' {filestr}")
 
     return load_from_path(config_path)
