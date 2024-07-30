@@ -44,7 +44,7 @@ def test_dataclass_subclass_from_dict_recursive_nested_false():
         a: int = 1
         b: AttrDict = field(default_factory=AttrDict)
 
-    cfg = MyConfig.from_dict({"a": 1, "b": {"c": 2}}, _nested_same_class=False)
+    cfg = MyConfig.from_dict({"a": 1, "b": {"c": 2}})
     assert cfg.a == 1
     assert cfg["a"] == 1
     assert cfg.b.c == 2
