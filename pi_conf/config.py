@@ -8,9 +8,9 @@ from typing import Literal, Optional, TypeVar
 
 from pi_conf.attr_dict import AttrDict, has_yaml, is_tomllib
 from pi_conf.module_check import has_yaml, is_tomllib
+from pi_conf.open_func import open_func as open
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
-from pi_conf.open_func import open_func as open
 
 if has_yaml:
     import yaml
@@ -270,7 +270,6 @@ def update_config(appname_path_dict: str | dict, directories: Optional[str | lis
     get_pmanager().delete(newcfg)
     return cfg
 
-
 def set_config(
     appname_path_dict: Optional[str | dict] = None,
     create_if_not_exists: bool = True,
@@ -292,30 +291,12 @@ def set_config(
     Returns:
         Config: A config object (an attribute dictionary)
     """
-    if appname_path_dict is None:
-        appname_path_dict = ".config.toml"
-
+    ncfg = load_config(appname_path_dict, directories=directories, ignore_warnings=True)
     cfg.clear()
-    if create_if_not_exists and isinstance(appname_path_dict, str):
-        path = _find_config(appname_path_dict, directories=directories)
-        if path is None:
-            if not isinstance(appname_path_dict, str):
-                raise Exception("Error! appname_path_dict must be a string to create a config file")
+    cfg.update(ncfg, _add_to_provenance=False)
+    get_pmanager().extend(cfg, ncfg.provenance)
 
-            if directories is not None:
-                if isinstance(directories, str):
-                    directories = [directories]
-                path = directories[0]
-            else:
-                path = site_config_dir(appname=appname_path_dict)
-            path = os.path.join(path, appname_path_dict, f"config{create_with_extension}")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-
-            log.info(f"Creating config file at '{path}' for appname '{appname_path_dict}'")
-            with open(path, "w") as fp:
-                fp.write("")
-            directories = [os.path.dirname(path)]
-    return update_config(appname_path_dict, directories=directories)
+    return cfg
 
 
 def load_from_dict(d: dict) -> Config:
