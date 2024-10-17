@@ -4,9 +4,11 @@ import configparser
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Literal, Optional, TypeVar
 
 from pi_conf.attr_dict import AttrDict, has_yaml, is_tomllib
+from pi_conf.definitions import PathType, PathTypes
 from pi_conf.module_check import has_yaml, is_tomllib
 from pi_conf.open_func import open_func as open
 from pi_conf.provenance import Provenance, ProvenanceOp
@@ -75,7 +77,7 @@ class ProvenanceDict(AttrDict):
     def load_config(
         self,
         appname_path_dict: str | dict,
-        directories: Optional[str | list] = None,
+        directories: Optional[PathType | PathTypes] = None,
     ) -> None:
         """Loads a config based on the given appname | path | dict
 
@@ -87,6 +89,8 @@ class ProvenanceDict(AttrDict):
                 str: appname to search for the config.toml in the the application config dir
             directories (Optional[str | list]): Optional list of directories to search
         """
+        if isinstance(directories, (str, Path)):
+            directories = [directories]
         newcfg = load_config(appname_path_dict, directories=directories)
         self.update(newcfg, _add_to_provenance=False)
         get_pmanager().extend(self, newcfg.provenance)
@@ -131,7 +135,7 @@ class Config(ProvenanceDict):
     pass
 
 
-def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
+def _load_config_file(path: PathType, ext: Optional[str] = None) -> Config:
     """Load a config file from the given path"""
     if ext is None:
         __, ext = os.path.splitext(path)
@@ -163,7 +167,7 @@ def _load_config_file(path: str, ext: Optional[str] = None) -> Config:
     raise Exception(f"Error! Unknown config file extension '{ext}'")
 
 
-def _get_default_search_paths(filename: str, appname: Optional[str] = None) -> list[str]:
+def _get_default_search_paths(filename: PathType, appname: Optional[str] = None) -> list[str]:
     """Get the default search paths for a config file."""
     if appname:
         return [
@@ -172,14 +176,14 @@ def _get_default_search_paths(filename: str, appname: Optional[str] = None) -> l
         ]
     else:
         return [
-            filename,
+            str(filename),
             os.path.expanduser(f"~/.config/{filename}"),
             os.path.join(site_config_dir(), filename),
         ]
 
 
 def _get_search_paths(
-    filename: str, directories: Optional[str | list[str]], appname: Optional[str] = None
+    filename: PathType, directories: Optional[PathTypes], appname: Optional[str] = None
 ) -> list[str]:
     """Get the search paths based on provided directories or default locations."""
     if directories is None:
@@ -204,8 +208,8 @@ def _find_file_with_extensions(path: str, extensions: list[str]) -> Optional[str
 
 
 def _find_config(
-    config_file_or_appname: str, directories: Optional[str | list[str]] = None
-) -> Optional[str]:
+    config_file_or_appname: str | PathType, directories: Optional[PathTypes] = None
+) -> Optional[PathType]:
     """Find the config file from the config directory or direct path."""
     # First, check if it's a direct file path
     if os.path.isfile(config_file_or_appname):
@@ -216,11 +220,13 @@ def _find_config(
     if ext:
         # It looks like a filename
         search_paths = _get_search_paths(config_file_or_appname, directories=directories)
-    else:
+    elif isinstance(config_file_or_appname, str):
         # It looks like an appname
         search_paths = _get_search_paths(
             "config.<ext>", directories=directories, appname=config_file_or_appname
         )
+    else:
+        raise ValueError(f"Invalid config file or appname: '{config_file_or_appname}'")
 
     extensions = ["toml", "json", "ini", "yaml"] if not ext else [""]
     for path in search_paths:
@@ -233,7 +239,7 @@ def _find_config(
 
 
 def _find_config_from_appname(
-    appname: str, file: Optional[str] = None, directories: Optional[str | list[str]] = None
+    appname: str, file: Optional[PathType] = None, directories: Optional[PathTypes] = None
 ) -> Optional[str]:
     """
     Find a config file based on the appname and optionally a specific file name.
@@ -251,7 +257,7 @@ def _find_config_from_appname(
     return None
 
 
-def update_config(appname_path_dict: str | dict, directories: Optional[str | list[str]]) -> Config:
+def update_config(appname_path_dict: PathType | dict, directories: Optional[PathTypes]) -> Config:
     """Update the global config with another config
 
     Args:
@@ -270,11 +276,12 @@ def update_config(appname_path_dict: str | dict, directories: Optional[str | lis
     get_pmanager().delete(newcfg)
     return cfg
 
+
 def set_config(
     appname_path_dict: Optional[str | dict] = None,
     create_if_not_exists: bool = True,
     create_with_extension=".toml",
-    directories: Optional[str | list] = None,
+    directories: Optional[str | PathTypes] = None,
 ) -> Config:
     """Sets the global config.toml to use based on the given appname | path | dict
 
@@ -291,6 +298,8 @@ def set_config(
     Returns:
         Config: A config object (an attribute dictionary)
     """
+    if isinstance(directories, (str, Path)):
+        directories = [directories]
     ncfg = load_config(appname_path_dict, directories=directories, ignore_warnings=True)
     cfg.clear()
     cfg.update(ncfg, _add_to_provenance=False)
@@ -304,18 +313,20 @@ def load_from_dict(d: dict) -> Config:
     return Config.from_dict(d)
 
 
-def load_from_path(path: str, directories: Optional[str | list] = None) -> Config:
+def load_from_path(path: PathType, directories: Optional[PathType | PathTypes] = None) -> Config:
     """Load a config from a file path"""
+    if isinstance(directories, (str, Path)):
+        directories = [directories]
     full_path = _find_config(path, directories=directories)
     if full_path is None:
         raise FileNotFoundError(f"No config file found at '{path}' or in provided directories")
     newcfg = _load_config_file(full_path)
-    get_pmanager().set(newcfg, Provenance(full_path, ProvenanceOp.set))
+    get_pmanager().set(newcfg, Provenance(str(full_path), ProvenanceOp.set))
     return newcfg
 
 
 def load_from_appname(
-    appname: str, file: Optional[str] = None, directories: Optional[str | list[str]] = None
+    appname: str, file: Optional[PathType] = None, directories: Optional[PathTypes] = None
 ) -> Config:
     """
     Load a config from an appname, optionally specifying a file name.
@@ -345,9 +356,9 @@ def load_from_appname(
 
 
 def load_config(
-    appname_path_dict: Optional[str | dict] = None,
-    file: Optional[str] = None,
-    directories: Optional[str | list] = None,
+    appname_path_dict: Optional[PathType | dict] = None,
+    file: Optional[PathType] = None,
+    directories: Optional[PathTypes] = None,
     ignore_warnings: bool = False,
 ) -> Config:
     """Loads a config based on the given appname | path | dict
@@ -375,8 +386,13 @@ def load_config(
         return load_from_path(appname_path_dict, directories)
     except FileNotFoundError:
         # If it's not found as a direct path, try as an appname
+
         try:
-            return load_from_appname(appname_path_dict, file, directories)
+            if isinstance(appname_path_dict, str):
+                return load_from_appname(appname_path_dict, file, directories)
+            raise FileNotFoundError(
+                f"No config file found at '{appname_path_dict}' or in provided directories"
+            )
         except FileNotFoundError:
             if ignore_warnings:
                 return Config.from_dict({})
