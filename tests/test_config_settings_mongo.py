@@ -12,7 +12,7 @@ class SubConfig(BaseModel):
     value: int
 
 
-class TestConfig(ConfigSettings):
+class MyConfig(ConfigSettings):
     string_value: str
     int_value: int
     nested_config: SubConfig
@@ -97,7 +97,7 @@ def test_config_settings_with_mongo(MockClient, mock_mongo):
     db_name = "test_db"
     collection_name = "test_collection"
 
-    class MongoTestConfig(TestConfig):
+    class MongoTestConfig(MyConfig):
         model_config = ConfigDict(
             mongo_uri=mongo_uri, mongo_database=db_name, mongo_collection=collection_name
         )
