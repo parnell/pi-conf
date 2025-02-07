@@ -143,5 +143,147 @@ def test_different_file_names(tmp_path, test_data, file_name):
     assert settings.int_value == test_data["int_value"]
 
 
+def test_from_config(tmp_path):
+    # Define a simple Pydantic model for testing
+    class UserPreferences(BaseModel):
+        theme: str
+        notifications_enabled: bool
+        favorite_numbers: List[int]
+        display_name: Optional[str] = None
+
+    # Create test data
+    test_data = {
+        "theme": "dark",
+        "notifications_enabled": True,
+        "favorite_numbers": [42, 7, 13],
+        "display_name": "TestUser",
+    }
+
+    # Write test data to TOML file
+    write_toml(test_data, tmp_path)
+
+    # Use from_config to create the model instance
+    user_prefs = ConfigSettings.from_config(
+        UserPreferences, model_config={"appname": str(tmp_path / "config.toml")}
+    )
+
+    # Verify the model was created correctly
+    assert isinstance(user_prefs, UserPreferences)
+    assert user_prefs.theme == "dark"
+    assert user_prefs.notifications_enabled is True
+    assert user_prefs.favorite_numbers == [42, 7, 13]
+    assert user_prefs.display_name == "TestUser"
+
+
+def test_from_config_with_nested_model(tmp_path):
+    # Define nested models
+    class Address(BaseModel):
+        street: str
+        city: str
+        postal_code: str
+
+    class User(BaseModel):
+        name: str
+        age: int
+        address: Address
+        tags: Optional[List[str]] = None
+
+    # Create test data with nested structure
+    test_data = {
+        "name": "John Doe",
+        "age": 30,
+        "address": {"street": "123 Main St", "city": "Springfield", "postal_code": "12345"},
+        "tags": ["user", "premium"],
+    }
+
+    # Write test data to TOML file
+    write_toml(test_data, tmp_path)
+
+    # Use from_config to create the model instance
+    user = ConfigSettings.from_config(User, model_config={"appname": str(tmp_path / "config.toml")})
+
+    # Verify the model and its nested components
+    assert isinstance(user, User)
+    assert user.name == "John Doe"
+    assert user.age == 30
+    assert isinstance(user.address, Address)
+    assert user.address.street == "123 Main St"
+    assert user.address.city == "Springfield"
+    assert user.address.postal_code == "12345"
+    assert user.tags == ["user", "premium"]
+
+
+def test_from_config_with_missing_optional(tmp_path):
+    # Define a model with optional fields
+    class Settings(BaseModel):
+        required_field: str
+        optional_field: Optional[str] = None
+        optional_list: Optional[List[str]] = None
+
+    # Create test data with only required field
+    test_data = {"required_field": "value"}
+
+    # Write test data to TOML file
+    write_toml(test_data, tmp_path)
+
+    # Use from_config to create the model instance
+    settings = ConfigSettings.from_config(
+        Settings, model_config={"appname": str(tmp_path / "config.toml")}
+    )
+
+    # Verify the model handles missing optional fields
+    assert isinstance(settings, Settings)
+    assert settings.required_field == "value"
+    assert settings.optional_field is None
+    assert settings.optional_list is None
+
+
+def test_from_config_validation_error(tmp_path):
+    # Define a model with specific validation
+    from pydantic import BaseModel, Field, ValidationError
+
+    class ValidatedSettings(BaseModel):
+        port: int = Field(ge=1, le=65535)  # Using Field for validation
+
+    # Create test data with invalid port
+    test_data = {"port": 70000}  # Invalid port number
+
+    # Write test data to TOML file
+    write_toml(test_data, tmp_path)
+
+    # Verify that validation error is raised
+    with pytest.raises(ValidationError):
+        ConfigSettings.from_config(
+            ValidatedSettings, model_config={"appname": str(tmp_path / "config.toml")}
+        )
+
+
+# Alternative version using model validator
+def test_from_config_validation_error_with_validator(tmp_path):
+    from pydantic import BaseModel, ValidationError, field_validator
+
+    class ValidatedSettings(BaseModel):
+        port: int
+
+        @field_validator("port")
+        @classmethod
+        def validate_port(cls, v: int) -> int:
+            if not 1 <= v <= 65535:
+                raise ValueError("Port must be between 1 and 65535")
+            return v
+
+    # Create test data with invalid port
+    test_data = {"port": 70000}  # Invalid port number
+
+    # Write test data to TOML file
+    write_toml(test_data, tmp_path)
+
+    # Verify that validation error is raised
+    with pytest.raises(ValidationError):
+        ConfigSettings.from_config(
+            ValidatedSettings, model_config={"appname": str(tmp_path / "config.toml")}
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
