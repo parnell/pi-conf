@@ -1,12 +1,12 @@
 
 test::
-	pytest tests
+	uv run pytest tests
 
 format::
-	toml-sort pyproject.toml
+	uv run toml-sort pyproject.toml
 
 build::
-	poetry build
+	uv build
 
 publish:: format build
-	poetry publish
+	uv publish
