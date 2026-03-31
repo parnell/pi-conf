@@ -4,6 +4,7 @@
 .env
 
 ## Python
+.venv
 dist
 *.py[co]
 __pycache__
@@ -42,4 +43,3 @@ cachedir
 ## VSCode
 *.vscode
 
-poetry.lock
