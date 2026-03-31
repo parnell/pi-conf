@@ -3,6 +3,7 @@ import sys
 
 import pytest
 
+import pi_conf.config as config_module
 from pi_conf import AttrDict, Config, load_config, set_config
 
 basedir = os.path.abspath(os.getcwd())
@@ -88,6 +89,57 @@ def test_update_attrdict_with_dict():
     assert d1.a == 1
     assert d1.b.a == 2
     assert d1.b.c == 3
+
+
+def test_config_load_config_conflict_raises_by_default():
+    cfg = Config.from_dict({"a": 1})
+
+    with pytest.raises(ValueError, match="overwrite existing keys: a"):
+        cfg.load_config({"a": 2})
+
+
+def test_config_load_config_overwrite_true_allows_replacement():
+    cfg = Config.from_dict({"a": 1})
+
+    cfg.load_config({"a": 2}, overwrite=True)
+
+    assert cfg.a == 2
+
+
+def test_update_config_conflict_raises_by_default():
+    original = Config.from_dict(dict(config_module.cfg))
+    original_provenance = list(config_module.cfg.provenance)
+    try:
+        config_module.cfg.clear()
+        config_module.cfg.update({"a": 1}, _add_to_provenance=False)
+
+        with pytest.raises(ValueError, match="overwrite existing keys: a"):
+            config_module.update_config({"a": 2}, directories=None)
+    finally:
+        config_module.cfg.clear()
+        config_module.cfg.update(original, _add_to_provenance=False)
+        pm = config_module.get_pmanager()
+        pm.clear(config_module.cfg)
+        pm.extend(config_module.cfg, original_provenance)
+
+
+def test_update_config_overwrite_true_allows_replacement():
+    original = Config.from_dict(dict(config_module.cfg))
+    original_provenance = list(config_module.cfg.provenance)
+    try:
+        config_module.cfg.clear()
+        config_module.cfg.update({"a": 1}, _add_to_provenance=False)
+
+        updated = config_module.update_config({"a": 2}, directories=None, overwrite=True)
+
+        assert updated.a == 2
+        assert config_module.cfg.a == 2
+    finally:
+        config_module.cfg.clear()
+        config_module.cfg.update(original, _add_to_provenance=False)
+        pm = config_module.get_pmanager()
+        pm.clear(config_module.cfg)
+        pm.extend(config_module.cfg, original_provenance)
 
 
 if __name__ == "__main__":

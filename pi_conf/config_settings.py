@@ -9,8 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Self, Type, TypeVar, get_args, get_origin
 
-import toml
-from bson import ObjectId
+try:
+    import toml as toml_io
+except ImportError:
+    toml_io = None
+
 from pydantic import BaseModel, PrivateAttr, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -84,8 +87,13 @@ class TomlConfigSource(ConfigSource):
     def update_config(self, updates: dict[str, Any]) -> None:
         if not self.toml_file:
             raise ValueError("Cannot update config: No TOML file specified")
+        if toml_io is None:
+            raise ImportError(
+                "Writing TOML requires the 'toml' package (e.g. pip install toml). "
+                "It is included when installing pi-conf with the pydantic extra."
+            )
 
-        current_config = toml.load(self.toml_file)
+        current_config = toml_io.load(self.toml_file)
 
         if self.toml_table_header:
             table = current_config
@@ -96,14 +104,14 @@ class TomlConfigSource(ConfigSource):
             current_config.update(updates)
 
         with open(self.toml_file, "w") as f:
-            toml.dump(current_config, f)
+            toml_io.dump(current_config, f)
 
     def refresh_config(self) -> Config:
         return self.load_config()
 
 
 if MONGODB_AVAILABLE:
-    from pymongo import MongoClient
+    from bson import ObjectId
 
     @dataclass
     class MongoConfigSource(ConfigSource):
@@ -248,10 +256,18 @@ class ConfigSettings(BaseSettings):
         return model_class.model_validate(model_fields)
 
     def _update(self, updates: dict[str, Any]) -> None:
+        if self._config_source is None:
+            raise ValueError(
+                "ConfigSettings was constructed without a TOML/Mongo source; _update is not available."
+            )
         self._config_source.update_config(updates)
         self.__dict__.update(updates)
 
     def _refresh(self) -> None:
+        if self._config_source is None:
+            raise ValueError(
+                "ConfigSettings was constructed without a TOML/Mongo source; _refresh is not available."
+            )
         new_config = self._config_source.refresh_config()
         self.__dict__.update(new_config)
 
@@ -323,8 +339,12 @@ class ConfigSettings(BaseSettings):
         Returns:
             str: The path to the created temporary TOML file.
         """
+        if toml_io is None:
+            raise ImportError(
+                "Writing TOML requires the 'toml' package (e.g. pip install toml)."
+            )
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".toml", delete=False) as temp_file:
-            toml.dump(config, temp_file)
+            toml_io.dump(config, temp_file)
             return temp_file.name
 
     def _parse_nested_objects(self, config_dict: Dict[str, Any]):

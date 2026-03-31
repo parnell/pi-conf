@@ -5,14 +5,14 @@ import os
 from dataclasses import fields, is_dataclass
 from typing import Any, Dict, Iterable, Optional, Type, TypeVar, cast
 
-from pi_conf.module_check import has_yaml, is_tomllib
+from pi_conf.module_check import has_stdlib_tomllib, has_toml_package, has_yaml
 
 if has_yaml:
     import yaml
-if is_tomllib:
+if has_stdlib_tomllib:
     import tomllib
-else:
-    import toml
+if has_toml_package:
+    import toml as toml_package
     
 
 
@@ -297,10 +297,14 @@ class AttrDict(dict):
             AttrDict: the AttrDict object, or subclass
         """
         if config_type == "toml":
-            if is_tomllib:
+            if has_stdlib_tomllib:
                 d = tomllib.loads(config_str)  # type: ignore
+            elif has_toml_package:
+                d = toml_package.loads(config_str)  # type: ignore
             else:
-                d = toml.loads(config_str)  # type: ignore
+                raise ImportError(
+                    "TOML parsing requires Python 3.11+ (stdlib tomllib) or the 'toml' package."
+                )
         elif config_type == "json":
             d = json.loads(config_str)
         elif config_type == "ini":

@@ -7,24 +7,24 @@ import os
 from pathlib import Path
 from typing import Literal, Optional, TypeVar
 
-from pi_conf.attr_dict import AttrDict, has_yaml, is_tomllib
+from pi_conf.attr_dict import AttrDict
 from pi_conf.definitions import PathType, PathTypes
-from pi_conf.module_check import has_yaml, is_tomllib
+from pi_conf.module_check import has_stdlib_tomllib, has_toml_package, has_yaml
 from pi_conf.open_func import open_func as open
 from pi_conf.provenance import Provenance, ProvenanceOp
 from pi_conf.provenance import get_provenance_manager as get_pmanager
 
 if has_yaml:
     import yaml
-if is_tomllib:
+if has_stdlib_tomllib:
     import tomllib
-else:
-    import toml
+if has_toml_package:
+    import toml as toml_package
 
 
 try:
     from platformdirs import site_config_dir
-except:
+except ImportError:
 
     def site_config_dir(
         appname: str | None = None,
@@ -78,6 +78,7 @@ class ProvenanceDict(AttrDict):
         self,
         appname_path_dict: str | dict,
         directories: Optional[PathType | PathTypes] = None,
+        overwrite: bool = False,
     ) -> None:
         """Loads a config based on the given appname | path | dict
 
@@ -88,10 +89,12 @@ class ProvenanceDict(AttrDict):
                 str: a path to a (.toml|.json|.ini|.yaml) file
                 str: appname to search for the config.toml in the the application config dir
             directories (Optional[str | list]): Optional list of directories to search
+            overwrite (bool): If True, allow incoming keys to overwrite existing keys
         """
         if isinstance(directories, (str, Path)):
             directories = [directories]
         newcfg = load_config(appname_path_dict, directories=directories)
+        _raise_if_conflicts(self, newcfg, overwrite=overwrite)
         self.update(newcfg, _add_to_provenance=False)
         get_pmanager().extend(self, newcfg.provenance)
         get_pmanager().delete(newcfg)
@@ -112,7 +115,7 @@ class ProvenanceDict(AttrDict):
             get_pmanager().append(self, Provenance("dict", ProvenanceOp.update))
 
     def clear(self) -> None:
-        get_pmanager().clear(cfg)
+        get_pmanager().clear(self)
         return super().clear()
 
     @classmethod
@@ -141,12 +144,16 @@ def _load_config_file(path: PathType, ext: Optional[str] = None) -> Config:
         __, ext = os.path.splitext(path)
 
     if ext == ".toml":
-        if is_tomllib:  # python 3.11+ have toml in the core libraries
+        if has_stdlib_tomllib:
             with open(path, "rb") as fp:
                 return Config.from_dict(tomllib.load(fp))  # type: ignore
-        else:  # python <3.11 need the toml library
+        elif has_toml_package:
             with open(path, "r") as fp:
-                return Config.from_dict(toml.loads(fp.read()))  # type: ignore
+                return Config.from_dict(toml_package.loads(fp.read()))  # type: ignore
+        else:
+            raise ImportError(
+                "TOML support requires Python 3.11+ (stdlib tomllib) or the 'toml' package."
+            )
     elif ext == ".json":
         with open(path, "r") as fp:
             return Config.from_dict(json.load(fp))
@@ -244,20 +251,38 @@ def _find_config_from_appname(
     """
     Find a config file based on the appname and optionally a specific file name.
     """
-    filename = file or "config.<ext>"
-    search_paths = _get_search_paths(filename, directories=directories, appname=appname)
-    extensions = ["toml", "json", "ini", "yaml"] if not file else [""]
+    filenames = [file] if file else [".config.toml", "config.<ext>"]
 
-    for path in search_paths:
-        found_path = _find_file_with_extensions(path, extensions)
-        if found_path:
-            log.debug(f"Found config: '{found_path}'")
-            return found_path
+    for filename in filenames:
+        search_paths = _get_search_paths(filename, directories=directories, appname=appname)
+        extensions = ["toml", "json", "ini", "yaml"] if not file else [""]
+
+        for path in search_paths:
+            found_path = _find_file_with_extensions(path, extensions)
+            if found_path:
+                log.debug(f"Found config: '{found_path}'")
+                return found_path
 
     return None
 
 
-def update_config(appname_path_dict: PathType | dict, directories: Optional[PathTypes]) -> Config:
+def _raise_if_conflicts(existing: dict, incoming: dict, overwrite: bool = False) -> None:
+    if overwrite:
+        return
+
+    conflicting_keys = sorted(set(existing).intersection(incoming))
+    if conflicting_keys:
+        raise ValueError(
+            "Config update would overwrite existing keys: "
+            f"{', '.join(conflicting_keys)}. Pass overwrite=True to allow overwriting."
+        )
+
+
+def update_config(
+    appname_path_dict: PathType | dict,
+    directories: Optional[PathTypes],
+    overwrite: bool = False,
+) -> Config:
     """Update the global config with another config
 
     Args:
@@ -266,11 +291,13 @@ def update_config(appname_path_dict: PathType | dict, directories: Optional[Path
             Dict: updates cfg with the given dict
             str: a path to a (.toml|.json|.ini|.yaml) file
             str: appname to search for the config.toml in the the application config dir
+        overwrite (bool): If True, allow incoming keys to overwrite existing keys
 
     Returns:
         Config: A config object (an attribute dictionary)
     """
     newcfg = load_config(appname_path_dict, directories=directories)
+    _raise_if_conflicts(cfg, newcfg, overwrite=overwrite)
     cfg.update(newcfg, _add_to_provenance=False)
     get_pmanager().extend(cfg, newcfg.provenance)
     get_pmanager().delete(newcfg)
@@ -360,22 +387,50 @@ def load_config(
     file: Optional[PathType] = None,
     directories: Optional[PathTypes] = None,
     ignore_warnings: bool = False,
+    *,
+    data: Optional[dict] = None,
+    path: Optional[PathType] = None,
+    appname: Optional[str] = None,
 ) -> Config:
     """Loads a config based on the given appname | path | dict
 
     Args:
-        appname_path_dict (str | dict): Set the config from an appname | path | dict
-        Can be passed with the following:
-            Dict: updates cfg with the given dict
-            str: a path to a (.toml|.json|.ini|.yaml) file
-            str: appname to search for the config.toml in the application config dir
-        file (Optional[str]): Specific file to search for when appname is provided
-        directories (Optional[str | list]): Optional list of directories to search
-        ignore_warnings (bool): If True, suppress warnings and return an empty Config for missing files
+        appname_path_dict (str | dict): Legacy first argument: dict, file path, or appname.
+        file (Optional[str]): Specific file to search for when resolving an appname.
+        directories (Optional[str | list]): Optional list of directories to search.
+        ignore_warnings (bool): If True, suppress warnings and return an empty Config for missing files.
+        data: Load explicitly from a dict (keyword-only; do not pass a positional source with this).
+        path: Load explicitly from a file path (keyword-only).
+        appname: Load by application name under OS config dirs (keyword-only).
 
     Returns:
         Config: A config object (an attribute dictionary)
     """
+    kw_sources = sum(1 for x in (data, path, appname) if x is not None)
+    if kw_sources > 1:
+        raise ValueError("Only one of data=, path=, or appname= may be given.")
+    if kw_sources:
+        if appname_path_dict is not None:
+            raise ValueError(
+                "Cannot combine a positional source with data=, path=, or appname=. "
+                "Use either the positional argument or keyword arguments."
+            )
+        if data is not None:
+            return load_from_dict(data)
+        if path is not None:
+            try:
+                return load_from_path(path, directories)
+            except FileNotFoundError:
+                if ignore_warnings:
+                    return Config.from_dict({})
+                raise
+        try:
+            return load_from_appname(appname, file, directories)  # type: ignore[arg-type]
+        except FileNotFoundError:
+            if ignore_warnings:
+                return Config.from_dict({})
+            raise
+
     if appname_path_dict is None:
         appname_path_dict = ".config.toml"
 

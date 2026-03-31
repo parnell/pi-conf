@@ -285,5 +285,18 @@ def test_from_config_validation_error_with_validator(tmp_path):
         )
 
 
+class PlainSettings(ConfigSettings):
+    model_config = ConfigDict()
+    count: int = 0
+
+
+def test_config_settings_update_without_file_source():
+    s = PlainSettings(count=1)
+    with pytest.raises(ValueError, match="without a TOML/Mongo source"):
+        s._update({"count": 2})
+    with pytest.raises(ValueError, match="without a TOML/Mongo source"):
+        s._refresh()
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

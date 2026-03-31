@@ -67,6 +67,16 @@ def test_provenance_from_load_config():
         assert len(cfg.provenance) == 1
         assert cfg.provenance[0].source == f.name
 
+def test_provenance_clear_clears_instance_not_global():
+    global_cfg = config.cfg
+    len_global_before = len(global_cfg.provenance)
+    other = Config.from_dict({"x": 1})
+    assert len(other.provenance) >= 1
+    other.clear()
+    assert len(other.provenance) == 0
+    assert len(global_cfg.provenance) == len_global_before
+
+
 def test_provenance_from_load_config_twice():
     s = """
     [a]
