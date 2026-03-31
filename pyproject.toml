@@ -1,42 +1,44 @@
 [build-system]
-build-backend = "poetry.core.masonry.api"
-requires = ["poetry-core"]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
-[tool.poetry]
-authors = ["parnell <3028114+parnell@users.noreply.github.com>"]
+[dependency-groups]
+dev = [
+  "mongomock>=4.1.2",
+  "pydantic-settings>=2.3.4",
+  "pymongo>=4.8.0",
+  "pytest>=8.2.2",
+  "pyyaml>=6.0.1",
+  "toml-sort>=0.23.1",
+  "toml>=0.10.2",
+  "types-pyyaml>=6.0.12.20240311",
+  "types-toml>=0.10.8.20240310"
+]
+
+[project]
+authors = [{email = "3028114+parnell@users.noreply.github.com", name = "parnell"}]
+dependencies = [
+  "platformdirs>=3.0.0",
+  'toml>=0.10.2; python_version < "3.11"'
+]
 description = "Easy configs for python projects"
-license = "MIT"
+license = {text = "MIT"}
 name = "pi-conf"
 readme = "README.md"
-version = "0.8.5.2"
+requires-python = ">=3.9"
+version = "1.0.0"
 
-[tool.poetry.dependencies]
-python = "^3.9"
-platformdirs = ">=3.0.0"
-toml = {python = ">3,<3.11", version = "^0.10.2"}
+[project.optional-dependencies]
+mongo = ["pymongo>=4.8.0"]
+pydantic = ["pydantic-settings>=2.3.4", "toml>=0.10.2"]
+yaml = ["pyyaml>=6.0.1"]
 
-[tool.poetry.extras]
-yaml = ["pyyaml"]
-
-[tool.poetry.group.dev.dependencies]
-mongomock = "^4.1.2"
-pymongo = "^4.8.0"
-pytest = "^8.2.2"
-toml = "^0.10.2"
-toml-sort = "^0.23.1"
-types-pyyaml = "^6.0.12.20240311"
-types-toml = "^0.10.8.20240310"
-
-[tool.poetry.group.pydantic]
-optional = true
-
-[tool.poetry.group.pydantic.dependencies]
-pydantic-settings = "^2.3.4"
-
-[tool.poetry.group.yaml.dependencies]
-pyyaml = "^6.0.1"
+[tool.hatch.build.targets.wheel]
+packages = ["pi_conf"]
 
 [tool.tomlsort]
 all = true
 in_place = true
-overrides."tool.poetry.dependencies".first = ["python"]
+
+[tool.uv]
+default-groups = ["dev"]
